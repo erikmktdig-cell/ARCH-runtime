@@ -1,0 +1,180 @@
+{
+  "contract_name": "project_state",
+  "contract_version": "1.0.0",
+  "schema_uri": "urn:arch:contracts:project_state:1.0.0",
+  "created_at": "2026-07-23T12:00:00+00:00",
+  "updated_at": "2026-07-23T12:05:00+00:00",
+  "record_version": 1,
+  "state_version_created": 0,
+  "state_version_updated": 1,
+  "metadata": {
+    "contract_name": "project_metadata",
+    "contract_version": "1.0.0",
+    "schema_uri": "urn:arch:contracts:project_metadata:1.0.0",
+    "created_at": "2026-07-23T12:00:00+00:00",
+    "updated_at": "2026-07-23T12:05:00+00:00",
+    "project_id": "PRJ-01HZX7M3FQ1T2Q9V8Y6K4C2B1A",
+    "name": "Kernel Pilot",
+    "slug": "kernel-pilot",
+    "summary": "Minimal valid project state.",
+    "owner": "platform-team"
+  },
+  "profile": {
+    "contract_name": "project_profile",
+    "contract_version": "1.0.0",
+    "schema_uri": "urn:arch:contracts:project_profile:1.0.0",
+    "created_at": "2026-07-23T12:00:00+00:00",
+    "updated_at": "2026-07-23T12:05:00+00:00",
+    "project_type": "platform",
+    "criticality": "high",
+    "default_route": "standard",
+    "objectives": ["Deliver a deterministic project state."],
+    "constraints": ["No persistence in the kernel."],
+    "success_criteria": ["The fixture round-trips without data loss."]
+  },
+  "lifecycle": {
+    "contract_name": "lifecycle_state",
+    "contract_version": "1.0.0",
+    "schema_uri": "urn:arch:contracts:lifecycle_state:1.0.0",
+    "created_at": "2026-07-23T12:00:00+00:00",
+    "updated_at": "2026-07-23T12:05:00+00:00",
+    "current_phase_id": "PHS-01HZX7M3FQ1T2Q9V8Y6K4C2B1B",
+    "current_phase_code": "F02",
+    "status": "active",
+    "started_at": "2026-07-23T12:01:00+00:00",
+    "completed_at": null,
+    "blocked_reason": null
+  },
+  "phase_execution_records": {
+    "PHS-01HZX7M3FQ1T2Q9V8Y6K4C2B1B": {
+      "contract_name": "phase_execution_record",
+      "contract_version": "1.0.0",
+      "schema_uri": "urn:arch:contracts:phase_execution_record:1.0.0",
+      "created_at": "2026-07-23T12:00:00+00:00",
+      "updated_at": "2026-07-23T12:05:00+00:00",
+      "record_version": 1,
+      "state_version_created": 1,
+      "state_version_updated": 1,
+      "phase_id": "PHS-01HZX7M3FQ1T2Q9V8Y6K4C2B1B",
+      "phase_code": "F02",
+      "status": "active",
+      "attempt": 1,
+      "started_at": "2026-07-23T12:01:00+00:00",
+      "completed_at": null,
+      "blocked_reason": null,
+      "artifact_ids": ["ART-01HZX7M3FQ1T2Q9V8Y6K4C2B1C"],
+      "requirement_ids": ["REQ-01HZX7M3FQ1T2Q9V8Y6K4C2B1D"]
+    }
+  },
+  "artifact_registry": {
+    "ART-01HZX7M3FQ1T2Q9V8Y6K4C2B1C": {
+      "contract_name": "artifact_record",
+      "contract_version": "1.0.0",
+      "schema_uri": "urn:arch:contracts:artifact_record:1.0.0",
+      "created_at": "2026-07-23T12:00:00+00:00",
+      "updated_at": "2026-07-23T12:05:00+00:00",
+      "record_version": 1,
+      "state_version_created": 1,
+      "state_version_updated": 1,
+      "artifact_id": "ART-01HZX7M3FQ1T2Q9V8Y6K4C2B1C",
+      "name": "State model",
+      "artifact_type": "python_module",
+      "status": "approved",
+      "owner": "platform-team",
+      "version": "1.0.0",
+      "content_uri": "file:///contracts/project_state.py",
+      "content_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "evidence": [],
+      "supersedes": null,
+      "superseded_by": null
+    }
+  },
+  "requirement_registry": {
+    "REQ-01HZX7M3FQ1T2Q9V8Y6K4C2B1D": {
+      "contract_name": "requirement_record",
+      "contract_version": "1.0.0",
+      "schema_uri": "urn:arch:contracts:requirement_record:1.0.0",
+      "created_at": "2026-07-23T12:00:00+00:00",
+      "updated_at": "2026-07-23T12:05:00+00:00",
+      "record_version": 1,
+      "state_version_created": 1,
+      "state_version_updated": 1,
+      "requirement_id": "REQ-01HZX7M3FQ1T2Q9V8Y6K4C2B1D",
+      "title": "State is serializable",
+      "description": "The project aggregate preserves all contract data.",
+      "priority": "must",
+      "status": "accepted",
+      "source": "WP-K03",
+      "acceptance_criteria": ["The fixture loads and round-trips."],
+      "artifact_ids": ["ART-01HZX7M3FQ1T2Q9V8Y6K4C2B1C"]
+    }
+  },
+  "risk_registry": {
+    "RISK-01HZX7M3FQ1T2Q9V8Y6K4C2B1E": {
+      "contract_name": "risk_record",
+      "contract_version": "1.0.0",
+      "schema_uri": "urn:arch:contracts:risk_record:1.0.0",
+      "created_at": "2026-07-23T12:00:00+00:00",
+      "updated_at": "2026-07-23T12:05:00+00:00",
+      "record_version": 1,
+      "state_version_created": 1,
+      "state_version_updated": 1,
+      "risk_id": "RISK-01HZX7M3FQ1T2Q9V8Y6K4C2B1E",
+      "title": "Schema drift",
+      "description": "Contracts could diverge without validation.",
+      "probability": 2,
+      "impact": 4,
+      "status": "open",
+      "owner": "platform-team",
+      "mitigation": null,
+      "related_artifact_ids": ["ART-01HZX7M3FQ1T2Q9V8Y6K4C2B1C"],
+      "related_requirement_ids": ["REQ-01HZX7M3FQ1T2Q9V8Y6K4C2B1D"]
+    }
+  },
+  "decision_log": [
+    {
+      "contract_name": "decision_record",
+      "contract_version": "1.0.0",
+      "schema_uri": "urn:arch:contracts:decision_record:1.0.0",
+      "created_at": "2026-07-23T12:00:00+00:00",
+      "updated_at": "2026-07-23T12:05:00+00:00",
+      "decision_id": "DEC-01HZX7M3FQ1T2Q9V8Y6K4C2B1F",
+      "title": "Use Pydantic contracts",
+      "context": "The kernel needs strict serializable models.",
+      "decision": "Use Pydantic v2 as the canonical model layer.",
+      "rationale": "It provides validation and JSON Schema from one source.",
+      "status": "accepted",
+      "decided_by": "platform-team",
+      "decided_at": "2026-07-23T12:03:00+00:00",
+      "supersedes": null,
+      "related_artifact_ids": ["ART-01HZX7M3FQ1T2Q9V8Y6K4C2B1C"],
+      "related_requirement_ids": ["REQ-01HZX7M3FQ1T2Q9V8Y6K4C2B1D"]
+    }
+  ],
+  "dependency_graph": [
+    {
+      "contract_name": "dependency_edge",
+      "contract_version": "1.0.0",
+      "schema_uri": "urn:arch:contracts:dependency_edge:1.0.0",
+      "created_at": "2026-07-23T12:00:00+00:00",
+      "updated_at": "2026-07-23T12:05:00+00:00",
+      "source": {
+        "target_type": "artifact",
+        "target_id": "ART-01HZX7M3FQ1T2Q9V8Y6K4C2B1C",
+        "target_version": "1.0.0",
+        "relation": "implements"
+      },
+      "target": {
+        "target_type": "requirement",
+        "target_id": "REQ-01HZX7M3FQ1T2Q9V8Y6K4C2B1D",
+        "target_version": "1.0.0",
+        "relation": "specified_by"
+      },
+      "dependency_type": "requires",
+      "required": true,
+      "reason": null
+    }
+  ],
+  "active_baseline_artifact_ids": ["ART-01HZX7M3FQ1T2Q9V8Y6K4C2B1C"],
+  "open_items": ["Review the initial state model."]
+}

@@ -1,0 +1,37 @@
+{
+  "contract_name": "event_envelope",
+  "contract_version": "1.0.0",
+  "schema_uri": "urn:arch:contracts:event_envelope:1.0.0",
+  "created_at": "2026-07-23T12:01:00+00:00",
+  "updated_at": null,
+  "event_id": "EVT-01HZX7M3FQ1T2Q9V8Y6K4C2B1G",
+  "event_type": "project.phase.activated",
+  "project_id": "PRJ-01HZX7M3FQ1T2Q9V8Y6K4C2B1A",
+  "aggregate": {
+    "target_type": "project",
+    "target_id": "PRJ-01HZX7M3FQ1T2Q9V8Y6K4C2B1A",
+    "target_version": "1.0.0",
+    "relation": "describes"
+  },
+  "occurred_at": "2026-07-23T12:01:00+00:00",
+  "recorded_at": "2026-07-23T12:01:01+00:00",
+  "actor": {
+    "contract_name": "event_actor",
+    "contract_version": "1.0.0",
+    "schema_uri": "urn:arch:contracts:event_actor:1.0.0",
+    "created_at": "2026-07-23T12:01:00+00:00",
+    "updated_at": null,
+    "actor_type": "system",
+    "actor_id": "arch-kernel",
+    "display_name": "ARch Kernel"
+  },
+  "correlation_id": null,
+  "causation_id": null,
+  "idempotency_key": "project/phase/activation:001",
+  "schema_version": "1.0.0",
+  "payload": {
+    "phase_id": "PHS-01HZX7M3FQ1T2Q9V8Y6K4C2B1B",
+    "phase_code": "F02",
+    "attempt": 1
+  }
+}

@@ -10,4 +10,6 @@ All notable changes to this project will be documented in this file.
 - Enforced runtime-to-kernel dependency direction and layer boundaries.
 - Static quality, architecture, distribution, and isolated-install gates.
 - Ubuntu and Windows CI matrix for Python 3.12 and 3.13.
-
+- Immutable stored-project, event, snapshot, and idempotency evidence contracts.
+- Repository, event, snapshot, idempotency, Unit of Work, and Clock protocols.
+- Structured runtime error taxonomy and reusable in-memory adapter contract tests.

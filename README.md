@@ -55,5 +55,9 @@ persisted; infrastructure failure must not complete an idempotency reservation.
 For the future event store, `previous_event_fingerprint` always refers to the
 previous event in the same project stream, never a global stream tail.
 
-There is currently no persistence implementation, repository protocol, Unit of
-Work, event store, Runtime API, HTTP API, CLI, authentication, or UI.
+R02 defines immutable storage evidence, repository protocols, Unit of Work,
+Clock, and structured errors. Its in-memory implementations exist under tests
+only as adapter contract fixtures.
+
+There is currently no persistence implementation, SQLite or SQL, application
+service, Runtime API, HTTP API, CLI, authentication, or UI.

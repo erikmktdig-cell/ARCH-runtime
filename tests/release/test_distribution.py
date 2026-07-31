@@ -45,6 +45,9 @@ def test_wheel_contains_only_the_typed_runtime_package(tmp_path: Path) -> None:
         metadata_name = next(name for name in names if name.endswith(".dist-info/METADATA"))
         metadata = archive.read(metadata_name).decode("utf-8")
     assert "arch_runtime/py.typed" in names
+    assert "arch_runtime/ports/storage.py" in names
+    assert "arch_runtime/ports/repositories.py" in names
+    assert "arch_runtime/ports/unit_of_work.py" in names
     assert "Requires-Dist: arch-kernel<0.2.0,>=0.1.0" in metadata
     assert not any(name.startswith(("tests/", "src/")) for name in names)
 
