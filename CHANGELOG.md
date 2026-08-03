@@ -16,3 +16,6 @@ All notable changes to this project will be documented in this file.
 - Secure SQLite connection setup with verified pragmas and explicit transactions.
 - Immutable SQL schema migrations, approved checksums, compatibility inspection,
   and the complete R00 table/index foundation.
+- Canonical SQLite adapters for projects, events, snapshots, and idempotency evidence.
+- `SQLiteUnitOfWork` with schema validation, `BEGIN IMMEDIATE`, explicit commit,
+  rollback by default, version-and-fingerprint CAS, and project-scoped event chains.

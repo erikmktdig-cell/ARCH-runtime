@@ -45,17 +45,17 @@ def test_r02_has_no_production_fake_or_in_memory_adapters() -> None:
     assert "class InMemory" not in source
 
 
-def test_r03_sqlite_foundation_excludes_repositories_and_unit_of_work() -> None:
+def test_r04_sqlite_adapter_surface_is_exact() -> None:
     sqlite_root = PACKAGE_ROOT / "persistence" / "sqlite"
     contents = {path.name for path in sqlite_root.iterdir() if path.name != "__pycache__"}
     assert contents == {
         "__init__.py",
         "config.py",
         "connection.py",
+        "codec.py",
         "migrations.py",
+        "repositories.py",
         "schema.py",
         "sql",
+        "unit_of_work.py",
     }
-    source = "\n".join(path.read_text(encoding="utf-8") for path in sqlite_root.rglob("*.py"))
-    assert "ProjectRepository" not in source
-    assert "SQLiteUnitOfWork" not in source

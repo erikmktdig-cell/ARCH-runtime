@@ -9,6 +9,12 @@ from arch_runtime.persistence.sqlite.connection import (
     rollback_transaction,
 )
 from arch_runtime.persistence.sqlite.migrations import SqlMigration, load_sql_migrations
+from arch_runtime.persistence.sqlite.repositories import (
+    SQLiteEventStore,
+    SQLiteIdempotencyStore,
+    SQLiteProjectRepository,
+    SQLiteSnapshotStore,
+)
 from arch_runtime.persistence.sqlite.schema import (
     SchemaInspection,
     SchemaStatus,
@@ -16,9 +22,15 @@ from arch_runtime.persistence.sqlite.schema import (
     migrate_schema,
     require_current_schema,
 )
+from arch_runtime.persistence.sqlite.unit_of_work import SQLiteUnitOfWork
 
 __all__ = (
     "SQLiteConfig",
+    "SQLiteEventStore",
+    "SQLiteIdempotencyStore",
+    "SQLiteProjectRepository",
+    "SQLiteSnapshotStore",
+    "SQLiteUnitOfWork",
     "SchemaInspection",
     "SchemaStatus",
     "SqlMigration",

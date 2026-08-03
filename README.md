@@ -6,9 +6,10 @@ without allowing infrastructure concerns to flow back into the kernel.
 
 ## Status
 
-R01 establishes packaging, dependency, architecture, test, build, and CI
-boundaries only. Persistence behavior, repositories, units of work, replay,
-migrations, APIs, CLIs, and user interfaces are intentionally not implemented.
+R04 provides the initial production SQLite persistence boundary: canonical
+repository adapters, optimistic concurrency, project-scoped event chains, and
+an explicit Unit of Work. Application services, replay, APIs, CLIs, and user
+interfaces remain intentionally unimplemented.
 
 The dependency direction is fixed:
 
@@ -33,7 +34,8 @@ uv build
 uv run twine check dist/*
 ```
 
-The only public root symbol in R01 is `arch_runtime.__version__`.
+The package root remains limited to `arch_runtime.__version__`. Infrastructure
+adapters are imported explicitly from `arch_runtime.persistence.sqlite`.
 
 ## Frozen Boundaries
 
@@ -63,6 +65,11 @@ R03 adds the SQLite foundation: validated connection configuration, mandatory
 pragmas, explicit transaction primitives, immutable numbered SQL migrations,
 approved checksums, and fail-closed schema compatibility inspection.
 
-There are currently no production repository adapters, SQLite Unit of Work,
-application services, Runtime API, replay behavior, HTTP API, CLI,
-authentication, or UI.
+R04 adds four SQLite repository adapters and `SQLiteUnitOfWork`. Reads verify
+canonical bytes and stored fingerprints; project writes use version-and-full-
+fingerprint CAS; event chains are scoped to each project; and every adapter
+shares one explicit transaction without committing independently.
+
+There are currently no application services, functional Runtime API, replay
+behavior, stored-contract migration execution, HTTP API, CLI, authentication,
+or UI.

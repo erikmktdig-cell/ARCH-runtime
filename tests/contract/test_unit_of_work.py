@@ -14,7 +14,8 @@ def test_unit_of_work_keeps_changes_after_explicit_commit(
         unit_of_work.projects.add(project_state)
         unit_of_work.commit()
 
-    assert unit_of_work.projects.get(project_state.metadata.project_id) is not None
+    with unit_of_work:
+        assert unit_of_work.projects.get(project_state.metadata.project_id) is not None
 
 
 def test_unit_of_work_rolls_back_when_commit_is_omitted(
@@ -24,7 +25,8 @@ def test_unit_of_work_rolls_back_when_commit_is_omitted(
     with unit_of_work:
         unit_of_work.projects.add(project_state)
 
-    assert unit_of_work.projects.get(project_state.metadata.project_id) is None
+    with unit_of_work:
+        assert unit_of_work.projects.get(project_state.metadata.project_id) is None
 
 
 def test_unit_of_work_rolls_back_on_exception(
@@ -39,4 +41,5 @@ def test_unit_of_work_rolls_back_on_exception(
     with pytest.raises(RuntimeError, match="failure"):
         mutate_and_fail()
 
-    assert unit_of_work.projects.get(project_state.metadata.project_id) is None
+    with unit_of_work:
+        assert unit_of_work.projects.get(project_state.metadata.project_id) is None
