@@ -10,6 +10,7 @@ import pytest
 
 pytestmark = pytest.mark.release
 ROOT = Path(__file__).parents[2]
+KERNEL_GIT_SOURCE = "arch-kernel @ git+https://github.com/erikmktdig-cell/ARCH-kernel.git@v0.1.0"
 
 
 def _build(output: Path) -> Path:
@@ -38,6 +39,36 @@ def _build_all(output: Path) -> tuple[Path, Path]:
     return next(output.glob("*.whl")), next(output.glob("*.tar.gz"))
 
 
+def _kernel_install_target(output: Path) -> str:
+    checkout = ROOT.parent / "arch-kernel"
+    if checkout.is_dir():
+        tags = subprocess.run(
+            ["git", "tag", "--points-at", "HEAD"],
+            cwd=checkout,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=checkout,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        if "v0.1.0" in tags.stdout.splitlines() and not status.stdout.strip():
+            kernel_dist = output / "kernel-dist"
+            subprocess.run(
+                ["uv", "build", "--wheel", "--out-dir", str(kernel_dist), str(checkout)],
+                cwd=ROOT,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            return str(next(kernel_dist.glob("arch_kernel-0.1.0-*.whl")))
+    return KERNEL_GIT_SOURCE
+
+
 def test_wheel_contains_only_the_typed_runtime_package(tmp_path: Path) -> None:
     wheel = _build(tmp_path / "dist")
     with zipfile.ZipFile(wheel) as archive:
@@ -48,6 +79,8 @@ def test_wheel_contains_only_the_typed_runtime_package(tmp_path: Path) -> None:
     assert "arch_runtime/ports/storage.py" in names
     assert "arch_runtime/ports/repositories.py" in names
     assert "arch_runtime/ports/unit_of_work.py" in names
+    assert "arch_runtime/persistence/sqlite/sql/0001_initial_tables.sql" in names
+    assert "arch_runtime/persistence/sqlite/sql/0002_initial_indexes.sql" in names
     assert "Requires-Dist: arch-kernel<0.2.0,>=0.1.0" in metadata
     assert not any(name.startswith(("tests/", "src/")) for name in names)
 
@@ -64,7 +97,7 @@ def test_wheel_imports_from_an_isolated_environment(tmp_path: Path) -> None:
             "install",
             "--python",
             str(python),
-            "arch-kernel @ git+https://github.com/erikmktdig-cell/ARCH-kernel.git@v0.1.0",
+            _kernel_install_target(tmp_path),
         ],
         cwd=tmp_path,
         check=True,
@@ -84,14 +117,15 @@ def test_wheel_imports_from_an_isolated_environment(tmp_path: Path) -> None:
             "-I",
             "-c",
             "import arch_kernel, arch_runtime; "
-            "print(arch_runtime.__version__, arch_kernel.__version__)",
+            "from arch_runtime.persistence.sqlite import load_sql_migrations; "
+            "print(arch_runtime.__version__, arch_kernel.__version__, len(load_sql_migrations()))",
         ],
         cwd=tmp_path,
         check=True,
         capture_output=True,
         text=True,
     )
-    assert completed.stdout.strip() == "0.1.0 0.1.0"
+    assert completed.stdout.strip() == "0.1.0 0.1.0 2"
 
 
 def test_sdist_contains_reviewable_sources_and_no_generated_state(tmp_path: Path) -> None:

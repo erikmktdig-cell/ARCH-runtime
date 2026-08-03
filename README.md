@@ -59,5 +59,10 @@ R02 defines immutable storage evidence, repository protocols, Unit of Work,
 Clock, and structured errors. Its in-memory implementations exist under tests
 only as adapter contract fixtures.
 
-There is currently no persistence implementation, SQLite or SQL, application
-service, Runtime API, HTTP API, CLI, authentication, or UI.
+R03 adds the SQLite foundation: validated connection configuration, mandatory
+pragmas, explicit transaction primitives, immutable numbered SQL migrations,
+approved checksums, and fail-closed schema compatibility inspection.
+
+There are currently no production repository adapters, SQLite Unit of Work,
+application services, Runtime API, replay behavior, HTTP API, CLI,
+authentication, or UI.

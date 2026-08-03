@@ -72,6 +72,7 @@ addopts = [
 markers = [
   "unit: focused package tests",
   "contract: reusable behavioral tests for port adapters",
+  "sqlite: SQLite connection, schema, and migration foundation tests",
   "architecture: import boundaries and bootstrap scope tests",
   "release: distribution and installation tests",
 ]

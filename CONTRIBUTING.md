@@ -13,7 +13,8 @@ Architecture tests must fail closed and identify the source file and import that
 crosses a frozen boundary. Before opening a change, run Ruff lint and format,
 mypy strict, the complete pytest suite, `uv build`, and `twine check dist/*`.
 
-Do not add SQLite imports, application commands, repository behavior, or runtime
+SQLite imports remain confined to `arch_runtime.persistence.sqlite`. Do not add
+repository behavior, SQLite Unit of Work, application commands, or runtime
 singletons until the corresponding work package is approved.
 
 Do not commit generated environments, caches, build output, credentials, or

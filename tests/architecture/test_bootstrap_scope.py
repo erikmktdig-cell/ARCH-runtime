@@ -7,7 +7,6 @@ PACKAGE_ROOT = Path(__file__).parents[2] / "src" / "arch_runtime"
 RESERVED_NAMESPACES = (
     "application",
     "persistence",
-    "persistence/sqlite",
     "replay",
     "migrations",
 )
@@ -44,3 +43,19 @@ def test_r02_has_no_production_fake_or_in_memory_adapters() -> None:
     source = "\n".join(path.read_text(encoding="utf-8") for path in PACKAGE_ROOT.rglob("*.py"))
     assert "class Fake" not in source
     assert "class InMemory" not in source
+
+
+def test_r03_sqlite_foundation_excludes_repositories_and_unit_of_work() -> None:
+    sqlite_root = PACKAGE_ROOT / "persistence" / "sqlite"
+    contents = {path.name for path in sqlite_root.iterdir() if path.name != "__pycache__"}
+    assert contents == {
+        "__init__.py",
+        "config.py",
+        "connection.py",
+        "migrations.py",
+        "schema.py",
+        "sql",
+    }
+    source = "\n".join(path.read_text(encoding="utf-8") for path in sqlite_root.rglob("*.py"))
+    assert "ProjectRepository" not in source
+    assert "SQLiteUnitOfWork" not in source

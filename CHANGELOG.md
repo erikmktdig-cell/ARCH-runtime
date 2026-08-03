@@ -13,3 +13,6 @@ All notable changes to this project will be documented in this file.
 - Immutable stored-project, event, snapshot, and idempotency evidence contracts.
 - Repository, event, snapshot, idempotency, Unit of Work, and Clock protocols.
 - Structured runtime error taxonomy and reusable in-memory adapter contract tests.
+- Secure SQLite connection setup with verified pragmas and explicit transactions.
+- Immutable SQL schema migrations, approved checksums, compatibility inspection,
+  and the complete R00 table/index foundation.

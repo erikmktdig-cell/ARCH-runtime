@@ -32,14 +32,15 @@ def test_runtime_does_not_import_excluded_frameworks() -> None:
     assert imported.isdisjoint(EXCLUDED_FRAMEWORKS)
 
 
-def test_r02_has_no_sqlite_imports() -> None:
-    sqlite_imports = [
+def test_sqlite_imports_are_confined_to_sqlite_foundation() -> None:
+    violations = [
         (path, module)
         for path, tree in _source_trees(PACKAGE_ROOT)
         for module in _modules(tree)
         if module == "sqlite3" or module.startswith("sqlite3.")
+        if "sqlite" not in path.relative_to(PACKAGE_ROOT).parts
     ]
-    assert sqlite_imports == []
+    assert violations == []
 
 
 def test_runtime_uses_only_public_kernel_modules() -> None:
