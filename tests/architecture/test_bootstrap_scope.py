@@ -16,13 +16,18 @@ RESERVED_NAMESPACES = (
 def test_reserved_namespace_contains_only_its_marker(namespace: str) -> None:
     directory = PACKAGE_ROOT / namespace
     contents = {path.name for path in directory.iterdir() if path.name != "__pycache__"}
-    expected = {"__init__.py", "sqlite"} if namespace == "persistence" else {"__init__.py"}
+    expected = {
+        "application": {"__init__.py", "commands.py", "results.py", "services.py"},
+        "persistence": {"__init__.py", "sqlite"},
+        "replay": {"__init__.py"},
+        "migrations": {"__init__.py"},
+    }[namespace]
     assert contents == expected
 
 
 def test_bootstrap_has_no_forbidden_runtime_artifacts() -> None:
     forbidden_suffixes = {".db", ".sqlite", ".sqlite3"}
-    forbidden_names = {"api.py", "cli.py", "commands.py", "services.py"}
+    forbidden_names = {"api.py", "cli.py", "runtime.py"}
     files = [path for path in PACKAGE_ROOT.rglob("*") if path.is_file()]
     assert not {path.suffix for path in files} & forbidden_suffixes
     assert not {path.name for path in files} & forbidden_names
@@ -33,6 +38,7 @@ def test_r02_ports_are_contracts_without_adapters() -> None:
     assert {path.name for path in ports.iterdir() if path.name != "__pycache__"} == {
         "__init__.py",
         "clock.py",
+        "generation.py",
         "repositories.py",
         "storage.py",
         "unit_of_work.py",

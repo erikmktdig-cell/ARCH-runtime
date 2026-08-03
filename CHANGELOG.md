@@ -19,3 +19,6 @@ All notable changes to this project will be documented in this file.
 - Canonical SQLite adapters for projects, events, snapshots, and idempotency evidence.
 - `SQLiteUnitOfWork` with schema validation, `BEGIN IMMEDIATE`, explicit commit,
   rollback by default, version-and-fingerprint CAS, and project-scoped event chains.
+- Strict normalized `CreateProjectCommand` and canonical `CreateProjectResult` contracts.
+- Synchronous `create_project` vertical slice with K08 validation, injectable IDs/time,
+  exact idempotency replay, atomic aggregate/event/result persistence, and post-commit checks.

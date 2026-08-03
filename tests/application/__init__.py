@@ -1,0 +1,1 @@
+"""Application vertical-slice tests."""

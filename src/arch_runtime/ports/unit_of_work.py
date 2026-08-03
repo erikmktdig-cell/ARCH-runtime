@@ -30,3 +30,8 @@ class UnitOfWork(Protocol):
         exc: BaseException | None,
         traceback: TracebackType | None,
     ) -> None: ...
+
+
+@runtime_checkable
+class UnitOfWorkFactory(Protocol):
+    def __call__(self) -> UnitOfWork: ...

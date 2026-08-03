@@ -1,6 +1,7 @@
 """Infrastructure-neutral runtime contracts and ports."""
 
 from arch_runtime.ports.clock import Clock
+from arch_runtime.ports.generation import EventIdGenerator, ProjectIdGenerator
 from arch_runtime.ports.repositories import (
     EventStore,
     IdempotencyStore,
@@ -14,18 +15,21 @@ from arch_runtime.ports.storage import (
     StoredProject,
     StoredSnapshot,
 )
-from arch_runtime.ports.unit_of_work import UnitOfWork
+from arch_runtime.ports.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 __all__ = (
     "Clock",
+    "EventIdGenerator",
     "EventStore",
     "IdempotencyRecord",
     "IdempotencyStatus",
     "IdempotencyStore",
+    "ProjectIdGenerator",
     "ProjectRepository",
     "SnapshotStore",
     "StoredEvent",
     "StoredProject",
     "StoredSnapshot",
     "UnitOfWork",
+    "UnitOfWorkFactory",
 )

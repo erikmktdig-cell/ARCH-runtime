@@ -6,10 +6,11 @@ without allowing infrastructure concerns to flow back into the kernel.
 
 ## Status
 
-R04 provides the initial production SQLite persistence boundary: canonical
-repository adapters, optimistic concurrency, project-scoped event chains, and
-an explicit Unit of Work. Application services, replay, APIs, CLIs, and user
-interfaces remain intentionally unimplemented.
+R05 provides the first synchronous application vertical slice. `create_project`
+normalizes and fingerprints commands, runs K08 validation, commits aggregate,
+creation event, and idempotency evidence atomically, then reloads the aggregate
+to verify persisted fingerprints. Replay, transition services, APIs, CLIs, and
+user interfaces remain intentionally unimplemented.
 
 The dependency direction is fixed:
 
@@ -51,10 +52,10 @@ ports              -> public arch_kernel contracts and typing only
 package root       -> metadata only
 ```
 
-The future idempotency contract distinguishes completed logical outcomes from
-infrastructure failures: success and canonical logical rejection may be
-persisted; infrastructure failure must not complete an idempotency reservation.
-For the future event store, `previous_event_fingerprint` always refers to the
+The idempotency contract distinguishes completed logical outcomes from
+infrastructure failures: success and canonical logical rejection are persisted;
+infrastructure failure does not complete an idempotency reservation. In the
+event store, `previous_event_fingerprint` always refers to the
 previous event in the same project stream, never a global stream tail.
 
 R02 defines immutable storage evidence, repository protocols, Unit of Work,
@@ -70,6 +71,11 @@ canonical bytes and stored fingerprints; project writes use version-and-full-
 fingerprint CAS; event chains are scoped to each project; and every adapter
 shares one explicit transaction without committing independently.
 
-There are currently no application services, functional Runtime API, replay
-behavior, stored-contract migration execution, HTTP API, CLI, authentication,
-or UI.
+R05 adds immutable create-project commands/results, injectable identity and UoW
+ports, and a synchronous `CreateProjectService`. The persisted event type is
+`project.aggregate.created`, satisfying the kernel's three-segment event grammar;
+its payload identifies the conceptual convention as `project.created`.
+
+There are currently no apply-transition service, functional Runtime API, replay
+behavior, automatic snapshots, stored-contract migration execution, HTTP API,
+CLI, authentication, or UI.
