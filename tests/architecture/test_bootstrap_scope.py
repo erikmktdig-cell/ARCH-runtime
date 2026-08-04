@@ -17,7 +17,15 @@ def test_reserved_namespace_contains_only_its_marker(namespace: str) -> None:
     directory = PACKAGE_ROOT / namespace
     contents = {path.name for path in directory.iterdir() if path.name != "__pycache__"}
     expected = {
-        "application": {"__init__.py", "commands.py", "results.py", "services.py"},
+        "application": {
+            "__init__.py",
+            "commands.py",
+            "events.py",
+            "evidence.py",
+            "idempotency.py",
+            "results.py",
+            "services.py",
+        },
         "persistence": {"__init__.py", "sqlite"},
         "replay": {"__init__.py"},
         "migrations": {"__init__.py"},

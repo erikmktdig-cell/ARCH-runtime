@@ -6,11 +6,12 @@ without allowing infrastructure concerns to flow back into the kernel.
 
 ## Status
 
-R05 provides the first synchronous application vertical slice. `create_project`
-normalizes and fingerprints commands, runs K08 validation, commits aggregate,
-creation event, and idempotency evidence atomically, then reloads the aggregate
-to verify persisted fingerprints. Replay, transition services, APIs, CLIs, and
-user interfaces remain intentionally unimplemented.
+R06 provides two synchronous application vertical slices. `create_project`
+persists a validated aggregate and creation event. `apply_transition` loads and
+verifies that aggregate, evaluates the transition through K08, rechecks optimistic
+preconditions inside the write transaction, and atomically persists the projected
+state, transition event, and idempotency result. Replay, APIs, CLIs, and user
+interfaces remain intentionally unimplemented.
 
 The dependency direction is fixed:
 
@@ -76,6 +77,13 @@ ports, and a synchronous `CreateProjectService`. The persisted event type is
 `project.aggregate.created`, satisfying the kernel's three-segment event grammar;
 its payload identifies the conceptual convention as `project.created`.
 
-There are currently no apply-transition service, functional Runtime API, replay
-behavior, automatic snapshots, stored-contract migration execution, HTTP API,
-CLI, authentication, or UI.
+R06 adds immutable transition commands/results and `ApplyTransitionService`.
+Logical rejections persist only canonical idempotency evidence. Successful no-op
+or test-only projections preserve aggregate version, timestamps, fingerprints,
+and event stream. Actual changes use version-and-full-fingerprint CAS, append
+`project.aggregate.transition_applied`, and reload persisted evidence after commit.
+The envelope `event_type` is authoritative for routing and future replay;
+`payload.event_name` remains descriptive only.
+
+There is currently no functional Runtime API, replay behavior, automatic snapshots,
+stored-contract migration execution, HTTP API, CLI, authentication, or UI.

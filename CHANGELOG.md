@@ -22,3 +22,9 @@ All notable changes to this project will be documented in this file.
 - Strict normalized `CreateProjectCommand` and canonical `CreateProjectResult` contracts.
 - Synchronous `create_project` vertical slice with K08 validation, injectable IDs/time,
   exact idempotency replay, atomic aggregate/event/result persistence, and post-commit checks.
+- Immutable `ApplyTransitionCommand` and canonical `ApplyTransitionResult` contracts.
+- Synchronous `apply_transition` vertical slice with K08 transition evaluation, in-transaction
+  CAS revalidation, explicit no-op handling, project-scoped event chaining, exact replay, and
+  atomic aggregate/event/idempotency persistence.
+- Shared application helpers for canonical idempotency replay, project evidence verification,
+  and authoritative K04 project event envelopes.

@@ -44,3 +44,58 @@ class CreateProjectResult(BaseModel):
         if self.success != self.validation_result.success:
             raise ValueError("application and K08 success values must agree")
         return self
+
+
+class ApplyTransitionResult(BaseModel):
+    """Canonical idempotent result of one transition application."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_name: Literal["arch.runtime.result.apply_transition"] = (
+        "arch.runtime.result.apply_transition"
+    )
+    contract_version: Literal["1.0.0"] = "1.0.0"
+    success: bool
+    changed: bool
+    project_id: ProjectId
+    validation_result: ValidationPipelineResult
+    before_record_version: Annotated[int, Field(ge=1)]
+    before_record_fingerprint: Fingerprint
+    before_content_fingerprint: Fingerprint
+    after_record_version: Annotated[int, Field(ge=1)] | None = None
+    after_record_fingerprint: Fingerprint | None = None
+    after_content_fingerprint: Fingerprint | None = None
+    event_id: EventId | None = None
+    stream_position: Annotated[int, Field(ge=1)] | None = None
+
+    @model_validator(mode="after")
+    def validate_outcome(self) -> Self:
+        after = (
+            self.after_record_version,
+            self.after_record_fingerprint,
+            self.after_content_fingerprint,
+        )
+        event = (self.event_id, self.stream_position)
+        if self.success != self.validation_result.success:
+            raise ValueError("application and K08 success values must agree")
+        if not self.success:
+            if self.changed or any(value is not None for value in (*after, *event)):
+                raise ValueError("rejected transition cannot contain commit evidence")
+            return self
+        if any(value is None for value in after):
+            raise ValueError("successful transition requires after-state evidence")
+        if self.changed:
+            if any(value is None for value in event):
+                raise ValueError("changed transition requires event evidence")
+            if self.after_record_version != self.before_record_version + 1:
+                raise ValueError("changed transition must increment the aggregate once")
+        else:
+            if any(value is not None for value in event):
+                raise ValueError("no-op transition cannot contain event evidence")
+            if after != (
+                self.before_record_version,
+                self.before_record_fingerprint,
+                self.before_content_fingerprint,
+            ):
+                raise ValueError("no-op transition must preserve aggregate evidence")
+        return self
