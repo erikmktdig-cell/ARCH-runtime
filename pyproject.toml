@@ -29,6 +29,7 @@ dependencies = [
 [dependency-groups]
 dev = [
   "build>=1.2",
+  "hypothesis>=6.0",
   "mypy>=1.13",
   "packaging>=24",
   "pytest>=8.0",

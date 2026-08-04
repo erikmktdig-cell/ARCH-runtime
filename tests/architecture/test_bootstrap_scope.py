@@ -27,7 +27,7 @@ def test_reserved_namespace_contains_only_its_marker(namespace: str) -> None:
             "services.py",
         },
         "persistence": {"__init__.py", "sqlite"},
-        "replay": {"__init__.py"},
+        "replay": {"__init__.py", "contracts.py", "service.py"},
         "migrations": {"__init__.py"},
     }[namespace]
     assert contents == expected

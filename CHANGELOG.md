@@ -28,3 +28,8 @@ All notable changes to this project will be documented in this file.
   atomic aggregate/event/idempotency persistence.
 - Shared application helpers for canonical idempotency replay, project evidence verification,
   and authoritative K04 project event envelopes.
+- Immutable `ReplayResult`, structured snapshot findings, and synchronous read-only replay.
+- Full reconstruction from authoritative creation and transition events using persisted K05
+  patches and evaluation times, with per-step chain/version/fingerprint verification.
+- Valid snapshot optimization, visible invalid-snapshot fallback, corruption fixtures, and
+  Hypothesis properties for version continuity and event fingerprint integrity.

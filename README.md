@@ -6,12 +6,13 @@ without allowing infrastructure concerns to flow back into the kernel.
 
 ## Status
 
-R06 provides two synchronous application vertical slices. `create_project`
+R07 provides two synchronous mutation vertical slices plus read-only replay. `create_project`
 persists a validated aggregate and creation event. `apply_transition` loads and
 verifies that aggregate, evaluates the transition through K08, rechecks optimistic
 preconditions inside the write transaction, and atomically persists the projected
-state, transition event, and idempotency result. Replay, APIs, CLIs, and user
-interfaces remain intentionally unimplemented.
+state, transition event, and idempotency result. `replay_project` reconstructs the
+aggregate from authoritative events and verifies it against operational storage.
+APIs, CLIs, and user interfaces remain intentionally unimplemented.
 
 The dependency direction is fixed:
 
@@ -85,5 +86,13 @@ and event stream. Actual changes use version-and-full-fingerprint CAS, append
 The envelope `event_type` is authoritative for routing and future replay;
 `payload.event_name` remains descriptive only.
 
-There is currently no functional Runtime API, replay behavior, automatic snapshots,
+R07 adds immutable replay results and `ReplayService`. Replay validates canonical
+event envelopes, project identity, stream order, fingerprint chain, version continuity,
+persisted before/after evidence, K08 projection evidence, and the final operational
+aggregate. Transition patches are reapplied through K05 at their persisted evaluation
+time. Snapshots may skip prior patch application only after matching stream evidence;
+invalid snapshots produce a visible finding and fall back to full replay when possible.
+Replay performs no writes and never repairs, truncates, or rewrites evidence.
+
+There is currently no functional Runtime API, automatic snapshot policy,
 stored-contract migration execution, HTTP API, CLI, authentication, or UI.

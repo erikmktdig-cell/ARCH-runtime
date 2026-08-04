@@ -1,0 +1,9 @@
+[
+  "broken_chain",
+  "missing_creation",
+  "unsupported_event_type",
+  "missing_patch",
+  "wrong_project_identity",
+  "out_of_order",
+  "aggregate_mismatch"
+]
