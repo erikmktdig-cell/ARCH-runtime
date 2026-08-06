@@ -47,6 +47,14 @@ def test_snapshot_store_returns_highest_aggregate_version(
     latest = snapshot_store.get_latest(project_state.metadata.project_id)
     assert latest is not None
     assert latest.aggregate_version == 2
+    listed = snapshot_store.list_for_project(project_state.metadata.project_id)
+    assert tuple(item.aggregate_version for item in listed) == (2, 1)
+
+    snapshot_store.delete(project_state.metadata.project_id, listed[-1].snapshot_id)
+    assert tuple(
+        item.aggregate_version
+        for item in snapshot_store.list_for_project(project_state.metadata.project_id)
+    ) == (2,)
 
 
 def test_idempotency_store_persists_canonical_logical_result(

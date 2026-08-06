@@ -33,3 +33,8 @@ All notable changes to this project will be documented in this file.
   patches and evaluation times, with per-step chain/version/fingerprint verification.
 - Valid snapshot optimization, visible invalid-snapshot fallback, corruption fixtures, and
   Hypothesis properties for version continuity and event fingerprint integrity.
+- Deterministic version-based snapshot policy, explicit canonical checkpoint creation,
+  idempotent per-version writes, configurable retention, and newest-valid selection.
+- Explicit materialized-aggregate recovery from verified event history with CAS, exact
+  idempotency, an append-only `project.aggregate.recovered` audit event, and fail-closed
+  handling of invalid streams and snapshots.

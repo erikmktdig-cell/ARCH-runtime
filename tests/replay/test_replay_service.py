@@ -8,11 +8,17 @@ from typing import Any
 
 import pytest
 from arch_kernel.contracts import DryRunResult, EventEnvelope, ProjectId, ProjectState
-from arch_kernel.kernel import apply_state_patch_dry_run, canonicalize_json, compute_fingerprint
+from arch_kernel.kernel import (
+    apply_state_patch_dry_run,
+    build_builtin_contract_registry,
+    canonicalize_json,
+    compute_fingerprint,
+)
 from pydantic import ValidationError
 
 from arch_runtime.errors import ProjectNotFoundError, ReplayIntegrityError
 from arch_runtime.ports import StoredSnapshot
+from arch_runtime.ports.storage import SnapshotId
 from arch_runtime.replay import (
     ReplayResult,
     ReplayService,
@@ -52,6 +58,13 @@ class UnreadableSnapshotStore:
 
     def save(self, snapshot: StoredSnapshot) -> None:
         raise AssertionError("replay must never save snapshots")
+
+    def list_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]:
+        self.get_latest(project_id)
+        raise AssertionError("unreachable")
+
+    def delete(self, project_id: ProjectId, snapshot_id: SnapshotId) -> None:
+        raise AssertionError("replay must never delete snapshots")
 
 
 def _service(seed: ReplaySeed, runner: CountingPatchRunner | None = None) -> ReplayService:
@@ -135,6 +148,37 @@ def test_invalid_snapshot_falls_back_to_full_replay_with_visible_finding(
     assert result.snapshot_id == snapshot.snapshot_id
     assert result.snapshot_findings[0].code == "replay.snapshot_invalid"
     assert result.record_fingerprint == replay_seed.current.record_fingerprint
+    assert runner.calls == 1
+
+
+def test_most_recent_valid_snapshot_is_selected_after_newer_invalid_checkpoint(
+    replay_seed: ReplaySeed,
+) -> None:
+    registration = build_builtin_contract_registry().get_by_model(ProjectState)
+    assert registration is not None
+    replay_seed.uow.snapshots.save(
+        StoredSnapshot(
+            snapshot_id="SNP-01HZX7M3FQ1T2Q9V8Y6K4C2R01",
+            project_id=replay_seed.project_id,
+            aggregate_version=replay_seed.created.record_version,
+            last_stream_position=1,
+            contract_name=replay_seed.created.contract_name,
+            contract_version=replay_seed.created.contract_version,
+            schema_fingerprint=registration.descriptor.schema_fingerprint,
+            record_fingerprint=replay_seed.created.record_fingerprint,
+            content_fingerprint=replay_seed.created.content_fingerprint,
+            state_json=replay_seed.created.state_json,
+            created_at=replay_seed.created.updated_at,
+        )
+    )
+    invalid = save_snapshot(replay_seed, valid=False)
+    runner = CountingPatchRunner()
+
+    result = _service(replay_seed, runner).replay_project(replay_seed.project_id)
+
+    assert result.snapshot_disposition is SnapshotDisposition.USED
+    assert result.snapshot_id == "SNP-01HZX7M3FQ1T2Q9V8Y6K4C2R01"
+    assert result.snapshot_findings[0].snapshot_id == invalid.snapshot_id
     assert runner.calls == 1
 
 

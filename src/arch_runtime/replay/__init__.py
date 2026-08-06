@@ -5,7 +5,7 @@ from arch_runtime.replay.contracts import (
     ReplayResult,
     SnapshotDisposition,
 )
-from arch_runtime.replay.service import ReplayService, replay_project
+from arch_runtime.replay.service import ReplayService, replay_project, replay_verified_history
 
 __all__ = (
     "ReplayFinding",
@@ -13,4 +13,5 @@ __all__ = (
     "ReplayService",
     "SnapshotDisposition",
     "replay_project",
+    "replay_verified_history",
 )

@@ -4,7 +4,13 @@ from typing import Protocol, runtime_checkable
 
 from arch_kernel.contracts import EventEnvelope, ProjectId, ProjectState
 
-from arch_runtime.ports.storage import IdempotencyRecord, StoredEvent, StoredProject, StoredSnapshot
+from arch_runtime.ports.storage import (
+    IdempotencyRecord,
+    SnapshotId,
+    StoredEvent,
+    StoredProject,
+    StoredSnapshot,
+)
 
 
 @runtime_checkable
@@ -45,7 +51,11 @@ class EventStore(Protocol):
 class SnapshotStore(Protocol):
     def get_latest(self, project_id: ProjectId) -> StoredSnapshot | None: ...
 
+    def list_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]: ...
+
     def save(self, snapshot: StoredSnapshot) -> None: ...
+
+    def delete(self, project_id: ProjectId, snapshot_id: SnapshotId) -> None: ...
 
 
 @runtime_checkable

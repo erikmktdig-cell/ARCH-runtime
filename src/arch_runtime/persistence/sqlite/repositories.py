@@ -22,6 +22,7 @@ from arch_runtime.ports import Clock
 from arch_runtime.ports.storage import (
     IdempotencyRecord,
     IdempotencyStatus,
+    SnapshotId,
     StoredEvent,
     StoredProject,
     StoredSnapshot,
@@ -272,14 +273,25 @@ class SQLiteSnapshotStore:
     def get_latest(self, project_id: ProjectId) -> StoredSnapshot | None:
         row = self._connection.execute(
             "SELECT * FROM project_snapshots WHERE project_id=? "
-            "ORDER BY aggregate_version DESC LIMIT 1",
+            "ORDER BY aggregate_version DESC, created_at DESC, snapshot_id DESC LIMIT 1",
             (str(project_id),),
         ).fetchone()
         if row is None:
             return None
-        stored = self._row(row)
-        self._codec.verify_project(stored)
-        return stored
+        snapshot = self._row(row)
+        self._codec.verify_project(snapshot)
+        return snapshot
+
+    def list_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]:
+        rows = self._connection.execute(
+            "SELECT * FROM project_snapshots WHERE project_id=? "
+            "ORDER BY aggregate_version DESC, created_at DESC, snapshot_id DESC",
+            (str(project_id),),
+        ).fetchall()
+        snapshots = tuple(self._row(row) for row in rows)
+        for snapshot in snapshots:
+            self._codec.verify_project(snapshot)
+        return snapshots
 
     def save(self, snapshot: StoredSnapshot) -> None:
         self._codec.verify_project(snapshot)
@@ -302,6 +314,22 @@ class SQLiteSnapshotStore:
             )
         except sqlite3.Error as error:
             raise _persistence_error("snapshot.save", error, snapshot.project_id) from error
+
+    def delete(self, project_id: ProjectId, snapshot_id: SnapshotId) -> None:
+        try:
+            cursor = self._connection.execute(
+                "DELETE FROM project_snapshots WHERE project_id=? AND snapshot_id=?",
+                (str(project_id), snapshot_id),
+            )
+        except sqlite3.Error as error:
+            raise _persistence_error("snapshot.delete", error, project_id) from error
+        if cursor.rowcount != 1:
+            raise PersistenceError(
+                "snapshot not found",
+                operation="snapshot.delete",
+                remediation="reload snapshot retention evidence",
+                project_id=project_id,
+            )
 
     @staticmethod
     def _row(row: sqlite3.Row) -> StoredSnapshot:

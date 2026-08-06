@@ -24,6 +24,7 @@ from arch_runtime.ports.storage import (
     Fingerprint,
     IdempotencyRecord,
     IdempotencyStatus,
+    SnapshotId,
     StoredEvent,
     StoredProject,
     StoredSnapshot,
@@ -41,13 +42,17 @@ class FrozenClock:
 
 
 def stored_project_from_state(state: ProjectState) -> StoredProject:
+    from arch_kernel.kernel import build_builtin_contract_registry
+
+    registration = build_builtin_contract_registry().get_by_model(ProjectState)
+    assert registration is not None
     updated_at = state.updated_at or state.created_at
     return StoredProject(
         project_id=state.metadata.project_id,
         record_version=state.record_version,
         contract_name=state.contract_name,
         contract_version=state.contract_version,
-        schema_fingerprint=SCHEMA_FINGERPRINT,
+        schema_fingerprint=registration.descriptor.schema_fingerprint,
         record_fingerprint=compute_fingerprint(state),
         content_fingerprint=compute_content_fingerprint(state),
         state_json=canonicalize_json(state),
@@ -164,8 +169,21 @@ class InMemorySnapshotStore:
         self.records: dict[ProjectId, list[StoredSnapshot]] = {}
 
     def get_latest(self, project_id: ProjectId) -> StoredSnapshot | None:
-        snapshots = self.records.get(project_id, [])
-        return max(snapshots, key=lambda value: value.aggregate_version, default=None)
+        snapshots = self.list_for_project(project_id)
+        return snapshots[0] if snapshots else None
+
+    def list_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]:
+        return tuple(
+            sorted(
+                self.records.get(project_id, []),
+                key=lambda value: (
+                    value.aggregate_version,
+                    value.created_at,
+                    value.snapshot_id,
+                ),
+                reverse=True,
+            )
+        )
 
     def save(self, snapshot: StoredSnapshot) -> None:
         snapshots = self.records.setdefault(snapshot.project_id, [])
@@ -177,6 +195,19 @@ class InMemorySnapshotStore:
                 project_id=snapshot.project_id,
             )
         snapshots.append(snapshot)
+
+    def delete(self, project_id: ProjectId, snapshot_id: SnapshotId) -> None:
+        snapshots = self.records.get(project_id, [])
+        for index, snapshot in enumerate(snapshots):
+            if snapshot.snapshot_id == snapshot_id:
+                snapshots.pop(index)
+                return
+        raise PersistenceError(
+            "snapshot not found",
+            operation="snapshot.delete",
+            remediation="reload snapshot retention evidence",
+            project_id=project_id,
+        )
 
 
 class InMemoryIdempotencyStore:

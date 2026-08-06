@@ -60,8 +60,8 @@ class ReplayResult(BaseModel):
             if self.snapshot_id is not None or self.snapshot_findings:
                 raise ValueError("absent snapshot cannot contain snapshot evidence")
         elif self.snapshot_disposition is SnapshotDisposition.USED:
-            if self.snapshot_id is None or self.snapshot_findings:
-                raise ValueError("used snapshot requires only its identity")
+            if self.snapshot_id is None:
+                raise ValueError("used snapshot requires its identity")
         elif not self.snapshot_findings:
             raise ValueError("bypassed snapshot requires a visible integrity finding")
         return self

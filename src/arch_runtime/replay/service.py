@@ -40,6 +40,7 @@ from arch_runtime.replay.contracts import (
 
 _CREATED = "project.aggregate.created"
 _TRANSITION_APPLIED = "project.aggregate.transition_applied"
+_RECOVERED = "project.aggregate.recovered"
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,12 +69,22 @@ class ReplayService:
         self._patch_runner = patch_runner
 
     def replay_project(self, project_id: ProjectId) -> ReplayResult:
-        aggregate, events, snapshot, snapshot_unreadable = self._load(project_id)
+        """Replay history and require equality with the operational aggregate."""
+
+        return self._replay(project_id, require_operational_match=True)
+
+    def replay_verified_history(self, project_id: ProjectId) -> ReplayResult:
+        """Replay immutable history for an explicit recovery decision."""
+
+        return self._replay(project_id, require_operational_match=False)
+
+    def _replay(self, project_id: ProjectId, *, require_operational_match: bool) -> ReplayResult:
+        aggregate, events, snapshots, snapshot_unreadable = self._load(project_id)
         aggregate_state = _decode_project(aggregate, operation="project.replay.aggregate")
         decoded = _decode_stream(project_id, events)
-        snapshot_state, disposition, finding = _select_snapshot(
+        snapshot_state, selected_snapshot, disposition, findings = _select_snapshot(
             project_id,
-            snapshot,
+            snapshots,
             snapshot_unreadable,
             decoded,
         )
@@ -83,13 +94,20 @@ class ReplayService:
             remaining = decoded[1:]
         else:
             state = snapshot_state
-            assert snapshot is not None
+            assert selected_snapshot is not None
             remaining = tuple(
                 item
                 for item in decoded
-                if item.stored.stream_position > snapshot.last_stream_position
+                if item.stored.stream_position > selected_snapshot.last_stream_position
             )
         for item in remaining:
+            if item.stored.event_type == _RECOVERED:
+                _require_state_evidence(
+                    state,
+                    _object(item.payload, "after", item.stored.project_id),
+                    "recovery after evidence",
+                )
+                continue
             if item.stored.event_type != _TRANSITION_APPLIED:
                 _fail(
                     "event following replay checkpoint is not a supported transition",
@@ -97,7 +115,8 @@ class ReplayService:
                 )
             state = self._apply_transition(state, item)
 
-        _require_final_aggregate(state, aggregate_state, aggregate, decoded[-1])
+        if require_operational_match:
+            _require_final_aggregate(state, aggregate_state, aggregate, decoded[-1])
         return ReplayResult(
             project_id=project_id,
             reconstructed_state=state,
@@ -105,8 +124,12 @@ class ReplayService:
             first_stream_position=decoded[0].stored.stream_position,
             last_stream_position=decoded[-1].stored.stream_position,
             snapshot_disposition=disposition,
-            snapshot_id=None if snapshot is None else snapshot.snapshot_id,
-            snapshot_findings=() if finding is None else (finding,),
+            snapshot_id=(
+                selected_snapshot.snapshot_id
+                if selected_snapshot is not None
+                else (snapshots[0].snapshot_id if snapshots else None)
+            ),
+            snapshot_findings=findings,
             record_version=state.record_version,
             record_fingerprint=compute_fingerprint(state),
             content_fingerprint=compute_content_fingerprint(state),
@@ -117,7 +140,7 @@ class ReplayService:
     ) -> tuple[
         StoredProject,
         tuple[StoredEvent, ...],
-        StoredSnapshot | None,
+        tuple[StoredSnapshot, ...],
         bool,
     ]:
         try:
@@ -125,14 +148,14 @@ class ReplayService:
                 aggregate = unit_of_work.projects.get(project_id)
                 events = unit_of_work.events.read_stream(project_id)
                 try:
-                    snapshot = unit_of_work.snapshots.get_latest(project_id)
+                    snapshots = unit_of_work.snapshots.list_for_project(project_id)
                     snapshot_unreadable = False
                 except (
                     CorruptStoredRecordError,
                     StoredMigrationRequiredError,
                     UnsupportedStoredContractError,
                 ):
-                    snapshot = None
+                    snapshots = ()
                     snapshot_unreadable = True
         except CorruptStoredRecordError as error:
             _fail("stored replay evidence is corrupt", project_id, cause=error)
@@ -145,7 +168,7 @@ class ReplayService:
             )
         if not events:
             _fail("project event stream is empty", project_id)
-        return aggregate, events, snapshot, snapshot_unreadable
+        return aggregate, events, snapshots, snapshot_unreadable
 
     def _apply_transition(self, state: ProjectState, item: _DecodedEvent) -> ProjectState:
         payload = item.payload
@@ -209,13 +232,14 @@ def _decode_stream(
             _fail("event payload is not a JSON object", project_id)
         if index == 0 and stored.event_type != _CREATED:
             _fail("project stream must begin with the creation event", project_id)
-        if index > 0 and stored.event_type != _TRANSITION_APPLIED:
+        if index > 0 and stored.event_type not in {_TRANSITION_APPLIED, _RECOVERED}:
             _fail("project stream contains an unsupported event type", project_id)
         if stored.aggregate_version_before != previous_version:
             _fail("project event versions are not continuous", project_id)
         after = _event_after_evidence(stored, payload)
         if previous_after is not None:
-            before = _object(payload, "before", project_id)
+            before_key = "stream_before" if stored.event_type == _RECOVERED else "before"
+            before = _object(payload, before_key, project_id)
             if _evidence_tuple(before, project_id) != previous_after:
                 _fail("adjacent event state evidence is discontinuous", project_id)
         decoded.append(_DecodedEvent(stored, envelope, payload, *after))
@@ -264,6 +288,21 @@ def _event_after_evidence(stored: StoredEvent, payload: dict[str, Any]) -> tuple
         return after
     after_object = _object(payload, "after", stored.project_id)
     after = _evidence_tuple(after_object, stored.project_id)
+    if stored.event_type == _RECOVERED:
+        if (
+            stored.aggregate_version_after != after[0]
+            or stored.aggregate_version_before != after[0]
+            or stored.is_state_change
+            or _evidence_tuple(
+                _object(payload, "stream_before", stored.project_id), stored.project_id
+            )
+            != after
+        ):
+            _fail("recovery event version evidence is inconsistent", stored.project_id)
+        _evidence_tuple(
+            _object(payload, "materialized_before", stored.project_id), stored.project_id
+        )
+        return after
     if (
         stored.aggregate_version_after != after[0]
         or stored.aggregate_version_after != stored.aggregate_version_before + 1
@@ -291,38 +330,45 @@ def _created_state_payload(payload: dict[str, Any], project_id: ProjectId) -> Pr
 
 def _select_snapshot(
     project_id: ProjectId,
-    snapshot: StoredSnapshot | None,
+    snapshots: tuple[StoredSnapshot, ...],
     unreadable: bool,
     events: tuple[_DecodedEvent, ...],
-) -> tuple[ProjectState | None, SnapshotDisposition, ReplayFinding | None]:
+) -> tuple[
+    ProjectState | None,
+    StoredSnapshot | None,
+    SnapshotDisposition,
+    tuple[ReplayFinding, ...],
+]:
     if unreadable:
-        return None, SnapshotDisposition.BYPASSED_INVALID, _snapshot_finding(None)
-    if snapshot is None:
-        return None, SnapshotDisposition.NOT_AVAILABLE, None
-    try:
-        state = _decode_project(snapshot, operation="project.replay.snapshot")
-        checkpoint = next(
-            item for item in events if item.stored.stream_position == snapshot.last_stream_position
-        )
-        expected = (
-            checkpoint.after_version,
-            checkpoint.after_record_fingerprint,
-            checkpoint.after_content_fingerprint,
-        )
-        actual = (
-            snapshot.aggregate_version,
-            snapshot.record_fingerprint,
-            snapshot.content_fingerprint,
-        )
-        if snapshot.project_id != project_id or actual != expected:
-            raise ValueError("snapshot evidence mismatch")
-    except (ReplayIntegrityError, StopIteration, ValueError):
-        return (
-            None,
-            SnapshotDisposition.BYPASSED_INVALID,
-            _snapshot_finding(snapshot.snapshot_id),
-        )
-    return state, SnapshotDisposition.USED, None
+        return None, None, SnapshotDisposition.BYPASSED_INVALID, (_snapshot_finding(None),)
+    if not snapshots:
+        return None, None, SnapshotDisposition.NOT_AVAILABLE, ()
+    findings: list[ReplayFinding] = []
+    for snapshot in snapshots:
+        try:
+            state = _decode_project(snapshot, operation="project.replay.snapshot")
+            checkpoint = next(
+                item
+                for item in events
+                if item.stored.stream_position == snapshot.last_stream_position
+            )
+            expected = (
+                checkpoint.after_version,
+                checkpoint.after_record_fingerprint,
+                checkpoint.after_content_fingerprint,
+            )
+            actual = (
+                snapshot.aggregate_version,
+                snapshot.record_fingerprint,
+                snapshot.content_fingerprint,
+            )
+            if snapshot.project_id != project_id or actual != expected:
+                raise ValueError("snapshot evidence mismatch")
+        except (ReplayIntegrityError, StopIteration, ValueError):
+            findings.append(_snapshot_finding(snapshot.snapshot_id))
+            continue
+        return state, snapshot, SnapshotDisposition.USED, tuple(findings)
+    return None, None, SnapshotDisposition.BYPASSED_INVALID, tuple(findings)
 
 
 def _decode_project(stored: StoredProject | StoredSnapshot, *, operation: str) -> ProjectState:
@@ -433,3 +479,9 @@ def replay_project(service: ReplayService, project_id: ProjectId) -> ReplayResul
     """Functional synchronous entry point for replay callers."""
 
     return service.replay_project(project_id)
+
+
+def replay_verified_history(service: ReplayService, project_id: ProjectId) -> ReplayResult:
+    """Functional entry point reserved for explicit recovery workflows."""
+
+    return service.replay_verified_history(project_id)

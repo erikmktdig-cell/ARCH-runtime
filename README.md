@@ -6,12 +6,16 @@ without allowing infrastructure concerns to flow back into the kernel.
 
 ## Status
 
-R07 provides two synchronous mutation vertical slices plus read-only replay. `create_project`
+R08 provides two synchronous mutation vertical slices, verified replay, explicit snapshots,
+and explicit recovery. `create_project`
 persists a validated aggregate and creation event. `apply_transition` loads and
 verifies that aggregate, evaluates the transition through K08, rechecks optimistic
 preconditions inside the write transaction, and atomically persists the projected
 state, transition event, and idempotency result. `replay_project` reconstructs the
 aggregate from authoritative events and verifies it against operational storage.
+`create_snapshot` checkpoints only replay-verified committed state under a deterministic
+version policy. `recover_aggregate` can replace divergent materialized state only after
+the immutable project stream verifies and an optimistic CAS succeeds.
 APIs, CLIs, and user interfaces remain intentionally unimplemented.
 
 The dependency direction is fixed:
@@ -94,5 +98,14 @@ time. Snapshots may skip prior patch application only after matching stream evid
 invalid snapshots produce a visible finding and fall back to full replay when possible.
 Replay performs no writes and never repairs, truncates, or rewrites evidence.
 
-There is currently no functional Runtime API, automatic snapshot policy,
+R08 adds deterministic `SnapshotPolicy` and `SnapshotService`. Snapshots contain canonical
+state at an exact project stream position, are idempotent per aggregate version, and use
+deterministic configurable retention. Replay selects the newest verifiable snapshot and
+falls back to full history when none is valid. `RecoveryService` is the only recovery path:
+it replays verified history, rechecks aggregate and stream evidence inside one Unit of Work,
+uses CAS to replace divergent materialized state, and appends the non-state-changing
+`project.aggregate.recovered` audit event. Correct aggregates produce an idempotent no-op;
+invalid event streams prohibit recovery.
+
+There is currently no functional Runtime API, automatic recovery during reads,
 stored-contract migration execution, HTTP API, CLI, authentication, or UI.
