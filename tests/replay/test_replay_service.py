@@ -63,6 +63,13 @@ class UnreadableSnapshotStore:
         self.get_latest(project_id)
         raise AssertionError("unreachable")
 
+    def list_stored_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]:
+        self.get_latest(project_id)
+        raise AssertionError("unreachable")
+
+    def replace(self, snapshot: StoredSnapshot, *, expected_record_fingerprint: str) -> None:
+        raise AssertionError("replay must never replace snapshots")
+
     def delete(self, project_id: ProjectId, snapshot_id: SnapshotId) -> None:
         raise AssertionError("replay must never delete snapshots")
 

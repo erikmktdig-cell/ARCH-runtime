@@ -6,8 +6,8 @@ without allowing infrastructure concerns to flow back into the kernel.
 
 ## Status
 
-R08 provides two synchronous mutation vertical slices, verified replay, explicit snapshots,
-and explicit recovery. `create_project`
+R09 provides two synchronous mutation vertical slices, verified replay, explicit snapshots,
+explicit recovery, and stored-contract migration. `create_project`
 persists a validated aggregate and creation event. `apply_transition` loads and
 verifies that aggregate, evaluates the transition through K08, rechecks optimistic
 preconditions inside the write transaction, and atomically persists the projected
@@ -16,6 +16,9 @@ aggregate from authoritative events and verifies it against operational storage.
 `create_snapshot` checkpoints only replay-verified committed state under a deterministic
 version policy. `recover_aggregate` can replace divergent materialized state only after
 the immutable project stream verifies and an optimistic CAS succeeds.
+`dry_run_stored_contract_migration` plans explicit K10 routes without writes;
+`apply_stored_contract_migration` updates materialized aggregates and snapshots under
+CAS, preserves historical event rows, and appends a verified migration projection event.
 APIs, CLIs, and user interfaces remain intentionally unimplemented.
 
 The dependency direction is fixed:
@@ -107,5 +110,14 @@ uses CAS to replace divergent materialized state, and appends the non-state-chan
 `project.aggregate.recovered` audit event. Correct aggregates produce an idempotent no-op;
 invalid event streams prohibit recovery.
 
+R09 integrates public K10 contract and migration registries with persisted evidence. Planning
+verifies canonical bytes, schemas, fingerprints, aggregate preconditions, and the project-scoped
+event chain without writing. Explicit application rechecks that evidence inside one Unit of Work,
+migrates the aggregate and snapshots with CAS, and appends
+`project.aggregate.contract_migrated` before replaying the complete projected history in the same
+transaction. Historical event rows remain byte-for-byte immutable; their current canonical K10
+projections live in the append-only audit event and are verified before replay. Logical migration
+rejections are exactly idempotent, while infrastructure failures roll back every surface.
+
 There is currently no functional Runtime API, automatic recovery during reads,
-stored-contract migration execution, HTTP API, CLI, authentication, or UI.
+automatic stored-contract migration, HTTP API, CLI, authentication, or UI.

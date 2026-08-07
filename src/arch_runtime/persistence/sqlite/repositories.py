@@ -50,6 +50,12 @@ class SQLiteProjectRepository:
         self._codec = codec
 
     def get(self, project_id: ProjectId) -> StoredProject | None:
+        stored = self.get_stored(project_id)
+        if stored is not None:
+            self._codec.verify_project(stored)
+        return stored
+
+    def get_stored(self, project_id: ProjectId) -> StoredProject | None:
         row = self._connection.execute(
             "SELECT * FROM project_aggregates WHERE project_id = ?", (str(project_id),)
         ).fetchone()
@@ -68,7 +74,6 @@ class SQLiteProjectRepository:
                 created_at=datetime.fromisoformat(row["created_at"].replace("Z", "+00:00")),
                 updated_at=datetime.fromisoformat(row["updated_at"].replace("Z", "+00:00")),
             )
-            self._codec.verify_project(stored)
         except (ValidationError, ValueError, TypeError) as error:
             raise CorruptStoredRecordError(
                 "stored project row is invalid",
@@ -174,7 +179,7 @@ class SQLiteEventStore:
         version_after: int,
         previous_event_fingerprint: str | None,
     ) -> int:
-        stream = self.read_stream(event.project_id)
+        stream = self.read_stored_stream(event.project_id)
         actual_tail = stream[-1].event_fingerprint if stream else None
         if actual_tail != previous_event_fingerprint:
             raise ConcurrentModificationError(
@@ -221,6 +226,14 @@ class SQLiteEventStore:
     def read_stream(
         self, project_id: ProjectId, *, after_position: int = 0
     ) -> tuple[StoredEvent, ...]:
+        records = self.read_stored_stream(project_id, after_position=after_position)
+        for record in records:
+            self._codec.verify_event(record)
+        return records
+
+    def read_stored_stream(
+        self, project_id: ProjectId, *, after_position: int = 0
+    ) -> tuple[StoredEvent, ...]:
         rows = self._connection.execute(
             "SELECT * FROM project_events WHERE project_id=? ORDER BY stream_position",
             (str(project_id),),
@@ -228,7 +241,6 @@ class SQLiteEventStore:
         records = tuple(self._row(row) for row in rows)
         expected_previous = None
         for record in records:
-            self._codec.verify_event(record)
             if record.previous_event_fingerprint != expected_previous:
                 raise CorruptStoredRecordError(
                     "stored project event chain is broken",
@@ -283,15 +295,18 @@ class SQLiteSnapshotStore:
         return snapshot
 
     def list_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]:
+        snapshots = self.list_stored_for_project(project_id)
+        for snapshot in snapshots:
+            self._codec.verify_project(snapshot)
+        return snapshots
+
+    def list_stored_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]:
         rows = self._connection.execute(
             "SELECT * FROM project_snapshots WHERE project_id=? "
             "ORDER BY aggregate_version DESC, created_at DESC, snapshot_id DESC",
             (str(project_id),),
         ).fetchall()
-        snapshots = tuple(self._row(row) for row in rows)
-        for snapshot in snapshots:
-            self._codec.verify_project(snapshot)
-        return snapshots
+        return tuple(self._row(row) for row in rows)
 
     def save(self, snapshot: StoredSnapshot) -> None:
         self._codec.verify_project(snapshot)
@@ -314,6 +329,44 @@ class SQLiteSnapshotStore:
             )
         except sqlite3.Error as error:
             raise _persistence_error("snapshot.save", error, snapshot.project_id) from error
+
+    def replace(
+        self,
+        snapshot: StoredSnapshot,
+        *,
+        expected_record_fingerprint: str,
+    ) -> None:
+        self._codec.verify_project(snapshot)
+        try:
+            cursor = self._connection.execute(
+                "UPDATE project_snapshots SET aggregate_version=?, last_stream_position=?, "
+                "contract_name=?, contract_version=?, schema_fingerprint=?, "
+                "record_fingerprint=?, content_fingerprint=?, state_json=?, created_at=? "
+                "WHERE snapshot_id=? AND project_id=? AND record_fingerprint=?",
+                (
+                    snapshot.aggregate_version,
+                    snapshot.last_stream_position,
+                    snapshot.contract_name,
+                    str(snapshot.contract_version),
+                    snapshot.schema_fingerprint,
+                    snapshot.record_fingerprint,
+                    snapshot.content_fingerprint,
+                    snapshot.state_json,
+                    _time(snapshot.created_at),
+                    snapshot.snapshot_id,
+                    str(snapshot.project_id),
+                    expected_record_fingerprint,
+                ),
+            )
+        except sqlite3.Error as error:
+            raise _persistence_error("snapshot.replace", error, snapshot.project_id) from error
+        if cursor.rowcount != 1:
+            raise ConcurrentModificationError(
+                "snapshot changed concurrently",
+                operation="snapshot.replace",
+                remediation="reload migration evidence and retry",
+                project_id=snapshot.project_id,
+            )
 
     def delete(self, project_id: ProjectId, snapshot_id: SnapshotId) -> None:
         try:

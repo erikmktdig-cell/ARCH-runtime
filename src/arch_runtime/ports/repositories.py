@@ -15,6 +15,8 @@ from arch_runtime.ports.storage import (
 
 @runtime_checkable
 class ProjectRepository(Protocol):
+    def get_stored(self, project_id: ProjectId) -> StoredProject | None: ...
+
     def get(self, project_id: ProjectId) -> StoredProject | None: ...
 
     def add(self, state: ProjectState) -> None: ...
@@ -46,6 +48,13 @@ class EventStore(Protocol):
         after_position: int = 0,
     ) -> tuple[StoredEvent, ...]: ...
 
+    def read_stored_stream(
+        self,
+        project_id: ProjectId,
+        *,
+        after_position: int = 0,
+    ) -> tuple[StoredEvent, ...]: ...
+
 
 @runtime_checkable
 class SnapshotStore(Protocol):
@@ -53,7 +62,16 @@ class SnapshotStore(Protocol):
 
     def list_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]: ...
 
+    def list_stored_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]: ...
+
     def save(self, snapshot: StoredSnapshot) -> None: ...
+
+    def replace(
+        self,
+        snapshot: StoredSnapshot,
+        *,
+        expected_record_fingerprint: str,
+    ) -> None: ...
 
     def delete(self, project_id: ProjectId, snapshot_id: SnapshotId) -> None: ...
 

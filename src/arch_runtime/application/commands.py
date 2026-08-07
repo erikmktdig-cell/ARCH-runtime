@@ -11,6 +11,7 @@ from arch_kernel.contracts import (
     PatchId,
     ProjectId,
     Route,
+    SemanticVersion,
     TransitionId,
     TransitionTarget,
 )
@@ -176,6 +177,60 @@ class RecoverAggregateCommand(BaseModel):
     expected_record_version: Annotated[int, Field(ge=1)]
     expected_record_fingerprint: Fingerprint
     expected_content_fingerprint: Fingerprint
+    reason: Annotated[str, StringConstraints(min_length=1, max_length=2_000)]
+    actor_type: ActorType = ActorType.HUMAN
+    actor_id: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    actor_display_name: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = (
+        None
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        for field in ("idempotency_key", "reason", "actor_id", "actor_display_name"):
+            item = normalized.get(field)
+            if isinstance(item, str):
+                normalized[field] = item.strip()
+        return normalized
+
+    def request_payload(self) -> dict[str, object]:
+        return self.model_dump(mode="json", exclude={"idempotency_key"})
+
+
+class PlanStoredContractMigrationCommand(BaseModel):
+    """Explicit immutable request to dry-run stored contract migration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_name: Literal["arch.runtime.command.plan_stored_contract_migration"] = (
+        "arch.runtime.command.plan_stored_contract_migration"
+    )
+    contract_version: Literal["1.0.0"] = "1.0.0"
+    project_id: ProjectId
+    target_project_version: SemanticVersion
+    target_event_version: SemanticVersion
+    expected_record_version: Annotated[int, Field(ge=1)]
+    expected_record_fingerprint: Fingerprint
+    expected_content_fingerprint: Fingerprint
+    expected_stream_position: Annotated[int, Field(ge=1)]
+    expected_stream_fingerprint: Fingerprint
+
+
+class ApplyStoredContractMigrationCommand(BaseModel):
+    """Explicit write intent bound to one exact migration dry-run plan."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_name: Literal["arch.runtime.command.apply_stored_contract_migration"] = (
+        "arch.runtime.command.apply_stored_contract_migration"
+    )
+    contract_version: Literal["1.0.0"] = "1.0.0"
+    idempotency_key: Annotated[str, StringConstraints(min_length=1, max_length=512)]
+    plan: PlanStoredContractMigrationCommand
+    expected_plan_fingerprint: Fingerprint
     reason: Annotated[str, StringConstraints(min_length=1, max_length=2_000)]
     actor_type: ActorType = ActorType.HUMAN
     actor_id: Annotated[str, StringConstraints(min_length=1, max_length=200)]

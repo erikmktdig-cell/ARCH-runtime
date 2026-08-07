@@ -31,7 +31,13 @@ from arch_runtime.errors import (
     StoredMigrationRequiredError,
     UnsupportedStoredContractError,
 )
-from arch_runtime.ports import StoredEvent, StoredProject, StoredSnapshot, UnitOfWorkFactory
+from arch_runtime.ports import (
+    StoredEvent,
+    StoredProject,
+    StoredSnapshot,
+    UnitOfWork,
+    UnitOfWorkFactory,
+)
 from arch_runtime.replay.contracts import (
     ReplayFinding,
     ReplayResult,
@@ -41,6 +47,7 @@ from arch_runtime.replay.contracts import (
 _CREATED = "project.aggregate.created"
 _TRANSITION_APPLIED = "project.aggregate.transition_applied"
 _RECOVERED = "project.aggregate.recovered"
+_CONTRACT_MIGRATED = "project.aggregate.contract_migrated"
 
 
 @dataclass(frozen=True, slots=True)
@@ -51,6 +58,16 @@ class _DecodedEvent:
     after_version: int
     after_record_fingerprint: str
     after_content_fingerprint: str
+
+
+@dataclass(frozen=True, slots=True)
+class _EventMigrationOverlay:
+    source_event_fingerprint: str
+    source_schema_version: str
+    target_schema_version: str
+    target_event_json: bytes
+    target_event_fingerprint: str
+    audit_stream_position: int
 
 
 type PatchRunner = Callable[..., DryRunResult]
@@ -78,10 +95,32 @@ class ReplayService:
 
         return self._replay(project_id, require_operational_match=False)
 
+    def replay_project_in_unit_of_work(
+        self, unit_of_work: UnitOfWork, project_id: ProjectId
+    ) -> ReplayResult:
+        """Verify candidate writes using the caller's still-open transaction."""
+
+        loaded = self._load_from_unit_of_work(unit_of_work, project_id)
+        return self._replay_loaded(project_id, loaded, require_operational_match=True)
+
     def _replay(self, project_id: ProjectId, *, require_operational_match: bool) -> ReplayResult:
-        aggregate, events, snapshots, snapshot_unreadable = self._load(project_id)
+        loaded = self._load(project_id)
+        return self._replay_loaded(project_id, loaded, require_operational_match)
+
+    def _replay_loaded(
+        self,
+        project_id: ProjectId,
+        loaded: tuple[
+            StoredProject,
+            tuple[StoredEvent, ...],
+            tuple[StoredSnapshot, ...],
+            bool,
+        ],
+        require_operational_match: bool,
+    ) -> ReplayResult:
+        aggregate, events, snapshots, snapshot_unreadable = loaded
         aggregate_state = _decode_project(aggregate, operation="project.replay.aggregate")
-        decoded = _decode_stream(project_id, events)
+        decoded = _decode_stream(project_id, events, _migration_overlays(project_id, events))
         snapshot_state, selected_snapshot, disposition, findings = _select_snapshot(
             project_id,
             snapshots,
@@ -101,7 +140,7 @@ class ReplayService:
                 if item.stored.stream_position > selected_snapshot.last_stream_position
             )
         for item in remaining:
-            if item.stored.event_type == _RECOVERED:
+            if item.stored.event_type in {_RECOVERED, _CONTRACT_MIGRATED}:
                 _require_state_evidence(
                     state,
                     _object(item.payload, "after", item.stored.project_id),
@@ -145,20 +184,31 @@ class ReplayService:
     ]:
         try:
             with self._unit_of_work_factory() as unit_of_work:
-                aggregate = unit_of_work.projects.get(project_id)
-                events = unit_of_work.events.read_stream(project_id)
-                try:
-                    snapshots = unit_of_work.snapshots.list_for_project(project_id)
-                    snapshot_unreadable = False
-                except (
-                    CorruptStoredRecordError,
-                    StoredMigrationRequiredError,
-                    UnsupportedStoredContractError,
-                ):
-                    snapshots = ()
-                    snapshot_unreadable = True
+                return self._load_from_unit_of_work(unit_of_work, project_id)
         except CorruptStoredRecordError as error:
             _fail("stored replay evidence is corrupt", project_id, cause=error)
+
+    @staticmethod
+    def _load_from_unit_of_work(
+        unit_of_work: UnitOfWork, project_id: ProjectId
+    ) -> tuple[
+        StoredProject,
+        tuple[StoredEvent, ...],
+        tuple[StoredSnapshot, ...],
+        bool,
+    ]:
+        aggregate = unit_of_work.projects.get_stored(project_id)
+        events = unit_of_work.events.read_stored_stream(project_id)
+        try:
+            snapshots = unit_of_work.snapshots.list_stored_for_project(project_id)
+            snapshot_unreadable = False
+        except (
+            CorruptStoredRecordError,
+            StoredMigrationRequiredError,
+            UnsupportedStoredContractError,
+        ):
+            snapshots = ()
+            snapshot_unreadable = True
         if aggregate is None:
             raise ProjectNotFoundError(
                 "project not found",
@@ -211,8 +261,74 @@ class ReplayService:
         return projected
 
 
-def _decode_stream(
+def _migration_overlays(
     project_id: ProjectId, events: tuple[StoredEvent, ...]
+) -> dict[str, _EventMigrationOverlay]:
+    by_fingerprint = {event.event_fingerprint: event for event in events}
+    overlays: dict[str, _EventMigrationOverlay] = {}
+    for audit in events:
+        if audit.event_type != _CONTRACT_MIGRATED:
+            continue
+        envelope = _decode_envelope(audit)
+        payload = envelope.model_dump(mode="json")["payload"]
+        if not isinstance(payload, dict):
+            _fail("contract migration payload is not an object", project_id)
+        projections = payload.get("event_projections")
+        if not isinstance(projections, list):
+            _fail("contract migration event projections are missing", project_id)
+        for value in projections:
+            if not isinstance(value, dict):
+                _fail("contract migration event projection is malformed", project_id)
+            source_fingerprint = value.get("source_event_fingerprint")
+            source_version = value.get("source_schema_version")
+            target_version = value.get("target_schema_version")
+            target_fingerprint = value.get("target_event_fingerprint")
+            target_event = value.get("target_event")
+            if not all(
+                isinstance(item, str)
+                for item in (
+                    source_fingerprint,
+                    source_version,
+                    target_version,
+                    target_fingerprint,
+                )
+            ) or not isinstance(target_event, dict):
+                _fail("contract migration event projection evidence is malformed", project_id)
+            assert isinstance(source_fingerprint, str)
+            source = by_fingerprint.get(source_fingerprint)
+            if source is None or source.stream_position >= audit.stream_position:
+                _fail("contract migration projection source is invalid", project_id)
+            if source_fingerprint in overlays:
+                _fail("event has multiple contract migration projections", project_id)
+            target_json = canonicalize_json(target_event)
+            if compute_fingerprint(target_event) != target_fingerprint:
+                _fail("contract migration target fingerprint is invalid", project_id)
+            overlays[source_fingerprint] = _EventMigrationOverlay(
+                source_event_fingerprint=source_fingerprint,
+                source_schema_version=cast(str, source_version),
+                target_schema_version=cast(str, target_version),
+                target_event_json=target_json,
+                target_event_fingerprint=cast(str, target_fingerprint),
+                audit_stream_position=audit.stream_position,
+            )
+    return overlays
+
+
+def _verify_raw_json(payload: bytes, fingerprint: str, project_id: ProjectId) -> None:
+    import json
+
+    try:
+        value = json.loads(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        _fail("stored historical event JSON is invalid", project_id, cause=error)
+    if canonicalize_json(value) != payload or compute_fingerprint(value) != fingerprint:
+        _fail("stored historical event evidence is corrupt", project_id)
+
+
+def _decode_stream(
+    project_id: ProjectId,
+    events: tuple[StoredEvent, ...],
+    overlays: dict[str, _EventMigrationOverlay],
 ) -> tuple[_DecodedEvent, ...]:
     decoded: list[_DecodedEvent] = []
     previous_fingerprint: str | None = None
@@ -226,19 +342,27 @@ def _decode_stream(
             _fail("project events are not ordered by stream position", project_id)
         if stored.previous_event_fingerprint != previous_fingerprint:
             _fail("project event fingerprint chain is broken", project_id)
-        envelope = _decode_envelope(stored)
+        envelope = _decode_envelope(stored, overlays.get(stored.event_fingerprint))
         payload = envelope.model_dump(mode="json")["payload"]
         if not isinstance(payload, dict):
             _fail("event payload is not a JSON object", project_id)
         if index == 0 and stored.event_type != _CREATED:
             _fail("project stream must begin with the creation event", project_id)
-        if index > 0 and stored.event_type not in {_TRANSITION_APPLIED, _RECOVERED}:
+        if index > 0 and stored.event_type not in {
+            _TRANSITION_APPLIED,
+            _RECOVERED,
+            _CONTRACT_MIGRATED,
+        }:
             _fail("project stream contains an unsupported event type", project_id)
         if stored.aggregate_version_before != previous_version:
             _fail("project event versions are not continuous", project_id)
         after = _event_after_evidence(stored, payload)
         if previous_after is not None:
-            before_key = "stream_before" if stored.event_type == _RECOVERED else "before"
+            before_key = (
+                "stream_before"
+                if stored.event_type in {_RECOVERED, _CONTRACT_MIGRATED}
+                else "before"
+            )
             before = _object(payload, before_key, project_id)
             if _evidence_tuple(before, project_id) != previous_after:
                 _fail("adjacent event state evidence is discontinuous", project_id)
@@ -250,19 +374,35 @@ def _decode_stream(
     return tuple(decoded)
 
 
-def _decode_envelope(stored: StoredEvent) -> EventEnvelope:
+def _decode_envelope(
+    stored: StoredEvent, overlay: _EventMigrationOverlay | None = None
+) -> EventEnvelope:
+    event_json = stored.event_json
+    expected_fingerprint = stored.event_fingerprint
+    expected_schema_version = str(stored.schema_version)
+    if overlay is not None:
+        if (
+            overlay.source_event_fingerprint != stored.event_fingerprint
+            or overlay.source_schema_version != str(stored.schema_version)
+            or overlay.audit_stream_position <= stored.stream_position
+        ):
+            _fail("stored event migration overlay is inconsistent", stored.project_id)
+        _verify_raw_json(stored.event_json, stored.event_fingerprint, stored.project_id)
+        event_json = overlay.target_event_json
+        expected_fingerprint = overlay.target_event_fingerprint
+        expected_schema_version = overlay.target_schema_version
     try:
-        envelope = EventEnvelope.model_validate_json(stored.event_json, strict=True)
+        envelope = EventEnvelope.model_validate_json(event_json, strict=True)
     except (ValidationError, ValueError) as error:
         _fail("stored event JSON is invalid", stored.project_id, cause=error)
     if (
-        canonicalize_json(envelope) != stored.event_json
-        or compute_fingerprint(envelope) != stored.event_fingerprint
+        canonicalize_json(envelope) != event_json
+        or compute_fingerprint(envelope) != expected_fingerprint
         or envelope.event_id != stored.event_id
         or envelope.project_id != stored.project_id
         or envelope.aggregate.target_id != stored.project_id
         or envelope.event_type != stored.event_type
-        or envelope.schema_version != stored.schema_version
+        or str(envelope.schema_version) != expected_schema_version
         or envelope.idempotency_key != stored.idempotency_key
         or envelope.recorded_at != stored.recorded_at
     ):
@@ -288,7 +428,7 @@ def _event_after_evidence(stored: StoredEvent, payload: dict[str, Any]) -> tuple
         return after
     after_object = _object(payload, "after", stored.project_id)
     after = _evidence_tuple(after_object, stored.project_id)
-    if stored.event_type == _RECOVERED:
+    if stored.event_type in {_RECOVERED, _CONTRACT_MIGRATED}:
         if (
             stored.aggregate_version_after != after[0]
             or stored.aggregate_version_before != after[0]

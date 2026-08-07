@@ -20,6 +20,7 @@ def test_reserved_namespace_contains_only_its_marker(namespace: str) -> None:
         "application": {
             "__init__.py",
             "commands.py",
+            "contract_migrations.py",
             "events.py",
             "evidence.py",
             "idempotency.py",

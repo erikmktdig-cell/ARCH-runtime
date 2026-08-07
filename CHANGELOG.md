@@ -38,3 +38,8 @@ All notable changes to this project will be documented in this file.
 - Explicit materialized-aggregate recovery from verified event history with CAS, exact
   idempotency, an append-only `project.aggregate.recovered` audit event, and fail-closed
   handling of invalid streams and snapshots.
+- Explicit K10 stored-contract migration planning and application with canonical evidence
+  verification, aggregate and snapshot CAS, exact idempotency, transactional post-migration
+  replay, and the append-only `project.aggregate.contract_migrated` audit event.
+- Immutable historical event rows with verified current-contract projections carried by the
+  migration audit event, plus fake and SQLite integration, rollback, and property tests.

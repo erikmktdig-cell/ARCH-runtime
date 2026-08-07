@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from enum import StrEnum
 from typing import Annotated, Literal, Self
 
-from arch_kernel.contracts import EventId, ProjectId, ValidationPipelineResult
+from arch_kernel.contracts import (
+    EventId,
+    FrozenJsonObject,
+    MigrationResult,
+    ProjectId,
+    ProjectState,
+    SemanticVersion,
+    ValidationPipelineResult,
+)
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from arch_runtime.ports.storage import Fingerprint, SnapshotId
@@ -178,4 +188,106 @@ class RecoverAggregateResult(BaseModel):
             raise ValueError("recovery requires complete audit event evidence")
         if not self.recovered and any(value is not None for value in event):
             raise ValueError("no-op recovery cannot append an audit event")
+        return self
+
+
+class StoredContractKind(StrEnum):
+    AGGREGATE = "aggregate"
+    EVENT = "event"
+    SNAPSHOT = "snapshot"
+
+
+class StoredContractMigrationItem(BaseModel):
+    """Before/after evidence for one K10-evaluated stored record."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    kind: StoredContractKind
+    record_id: str
+    source_version: SemanticVersion
+    target_version: SemanticVersion
+    before_schema_fingerprint: Fingerprint
+    before_record_fingerprint: Fingerprint
+    before_content_fingerprint: Fingerprint | None = None
+    after_schema_fingerprint: Fingerprint | None = None
+    after_record_fingerprint: Fingerprint | None = None
+    after_content_fingerprint: Fingerprint | None = None
+    after_payload: FrozenJsonObject | None = None
+    migration_result: MigrationResult
+
+    @model_validator(mode="after")
+    def validate_migration_item(self) -> Self:
+        after = (
+            self.after_schema_fingerprint,
+            self.after_record_fingerprint,
+            self.after_payload,
+        )
+        if self.migration_result.success and any(value is None for value in after):
+            raise ValueError("successful stored migration requires complete after evidence")
+        if not self.migration_result.success and any(value is not None for value in after):
+            raise ValueError("failed stored migration cannot expose an after projection")
+        return self
+
+
+class StoredContractMigrationDryRunResult(BaseModel):
+    """Pure deterministic plan produced before any persistence mutation."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_name: Literal["arch.runtime.result.stored_contract_migration_dry_run"] = (
+        "arch.runtime.result.stored_contract_migration_dry_run"
+    )
+    contract_version: Literal["1.0.0"] = "1.0.0"
+    success: bool
+    changed: bool
+    project_id: ProjectId
+    evaluated_at: datetime
+    before_record_version: Annotated[int, Field(ge=1)]
+    before_record_fingerprint: Fingerprint
+    before_content_fingerprint: Fingerprint
+    stream_position: Annotated[int, Field(ge=1)]
+    stream_fingerprint: Fingerprint
+    migration_registry_fingerprint: Fingerprint
+    items: tuple[StoredContractMigrationItem, ...]
+    projected_state: ProjectState | None = None
+    plan_fingerprint: Fingerprint
+
+    @model_validator(mode="after")
+    def validate_dry_run(self) -> Self:
+        if self.changed != bool(self.items):
+            raise ValueError("changed must reflect migration items")
+        if self.success != all(item.migration_result.success for item in self.items):
+            raise ValueError("dry-run success must reflect all K10 results")
+        if self.success and self.projected_state is None:
+            raise ValueError("successful dry run requires projected current state")
+        if not self.success and self.projected_state is not None:
+            raise ValueError("failed dry run cannot expose projected state")
+        return self
+
+
+class ApplyStoredContractMigrationResult(BaseModel):
+    """Canonical idempotent result of one explicit stored-contract migration."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_name: Literal["arch.runtime.result.apply_stored_contract_migration"] = (
+        "arch.runtime.result.apply_stored_contract_migration"
+    )
+    contract_version: Literal["1.0.0"] = "1.0.0"
+    success: bool
+    changed: bool
+    project_id: ProjectId
+    dry_run: StoredContractMigrationDryRunResult
+    event_id: EventId | None = None
+    stream_position: Annotated[int, Field(ge=1)] | None = None
+
+    @model_validator(mode="after")
+    def validate_apply_result(self) -> Self:
+        if self.success != self.dry_run.success or self.changed != self.dry_run.changed:
+            raise ValueError("apply outcome must agree with its dry run")
+        event = (self.event_id, self.stream_position)
+        if self.success and self.changed and any(value is None for value in event):
+            raise ValueError("changed migration requires audit event evidence")
+        if (not self.success or not self.changed) and any(value is not None for value in event):
+            raise ValueError("non-committed migration cannot contain event evidence")
         return self

@@ -68,6 +68,9 @@ class InMemoryProjectRepository:
     def get(self, project_id: ProjectId) -> StoredProject | None:
         return self.records.get(project_id)
 
+    def get_stored(self, project_id: ProjectId) -> StoredProject | None:
+        return self.records.get(project_id)
+
     def add(self, state: ProjectState) -> None:
         project_id = state.metadata.project_id
         if project_id in self.records:
@@ -163,6 +166,14 @@ class InMemoryEventStore:
             if record.project_id == project_id and record.stream_position > after_position
         )
 
+    def read_stored_stream(
+        self,
+        project_id: ProjectId,
+        *,
+        after_position: int = 0,
+    ) -> tuple[StoredEvent, ...]:
+        return self.read_stream(project_id, after_position=after_position)
+
 
 class InMemorySnapshotStore:
     def __init__(self) -> None:
@@ -185,6 +196,9 @@ class InMemorySnapshotStore:
             )
         )
 
+    def list_stored_for_project(self, project_id: ProjectId) -> tuple[StoredSnapshot, ...]:
+        return self.list_for_project(project_id)
+
     def save(self, snapshot: StoredSnapshot) -> None:
         snapshots = self.records.setdefault(snapshot.project_id, [])
         if any(item.aggregate_version == snapshot.aggregate_version for item in snapshots):
@@ -195,6 +209,26 @@ class InMemorySnapshotStore:
                 project_id=snapshot.project_id,
             )
         snapshots.append(snapshot)
+
+    def replace(
+        self,
+        snapshot: StoredSnapshot,
+        *,
+        expected_record_fingerprint: str,
+    ) -> None:
+        snapshots = self.records.get(snapshot.project_id, [])
+        for index, current in enumerate(snapshots):
+            if current.snapshot_id == snapshot.snapshot_id:
+                if current.record_fingerprint != expected_record_fingerprint:
+                    break
+                snapshots[index] = snapshot
+                return
+        raise ConcurrentModificationError(
+            "snapshot changed concurrently",
+            operation="snapshot.replace",
+            remediation="reload migration evidence and retry",
+            project_id=snapshot.project_id,
+        )
 
     def delete(self, project_id: ProjectId, snapshot_id: SnapshotId) -> None:
         snapshots = self.records.get(project_id, [])
