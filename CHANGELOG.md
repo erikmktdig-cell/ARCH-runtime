@@ -47,3 +47,6 @@ All notable changes to this project will be documented in this file.
   R05-R09 use case without exposing SQLite adapters or retaining shared transactions.
 - Verified `GetProjectResult`, public event-tail fingerprint evidence, explicit empty-schema
   initialization, idempotent lifecycle closure, and real-file multi-instance SQLite E2E tests.
+- R11 integration and corruption hardening across aggregate, event, snapshot, idempotency,
+  schema-history, concurrency, transaction rollback, deterministic replay, and bounded
+  long-chain behavior through the public `Runtime` facade.
