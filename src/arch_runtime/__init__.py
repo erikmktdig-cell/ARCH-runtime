@@ -1,5 +1,68 @@
-"""Public package surface for ARch Runtime."""
+"""Stable public package surface for ARch Runtime."""
 
 from arch_runtime.__about__ import __version__
+from arch_runtime.application import (
+    ApplyStoredContractMigrationCommand,
+    ApplyStoredContractMigrationResult,
+    ApplyTransitionCommand,
+    ApplyTransitionResult,
+    CreateProjectCommand,
+    CreateProjectResult,
+    CreateSnapshotCommand,
+    CreateSnapshotResult,
+    GetProjectResult,
+    PlanStoredContractMigrationCommand,
+    RecoverAggregateCommand,
+    RecoverAggregateResult,
+    StoredContractMigrationDryRunResult,
+)
+from arch_runtime.errors import (
+    ArchRuntimeError,
+    ConcurrentModificationError,
+    CorruptStoredRecordError,
+    IdempotencyConflictError,
+    PersistenceError,
+    ProjectAlreadyExistsError,
+    ProjectNotFoundError,
+    ReplayIntegrityError,
+    RuntimeConfigurationError,
+    RuntimeSchemaMigrationRequiredError,
+    StoredMigrationRequiredError,
+    UnsupportedRuntimeSchemaError,
+    UnsupportedStoredContractError,
+)
+from arch_runtime.replay import ReplayResult
+from arch_runtime.runtime import Runtime, RuntimeConfig
 
-__all__ = ("__version__",)
+__all__ = (
+    "ApplyStoredContractMigrationCommand",
+    "ApplyStoredContractMigrationResult",
+    "ApplyTransitionCommand",
+    "ApplyTransitionResult",
+    "ArchRuntimeError",
+    "ConcurrentModificationError",
+    "CorruptStoredRecordError",
+    "CreateProjectCommand",
+    "CreateProjectResult",
+    "CreateSnapshotCommand",
+    "CreateSnapshotResult",
+    "GetProjectResult",
+    "IdempotencyConflictError",
+    "PersistenceError",
+    "PlanStoredContractMigrationCommand",
+    "ProjectAlreadyExistsError",
+    "ProjectNotFoundError",
+    "RecoverAggregateCommand",
+    "RecoverAggregateResult",
+    "ReplayIntegrityError",
+    "ReplayResult",
+    "Runtime",
+    "RuntimeConfig",
+    "RuntimeConfigurationError",
+    "RuntimeSchemaMigrationRequiredError",
+    "StoredContractMigrationDryRunResult",
+    "StoredMigrationRequiredError",
+    "UnsupportedRuntimeSchemaError",
+    "UnsupportedStoredContractError",
+    "__version__",
+)

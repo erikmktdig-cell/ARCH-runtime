@@ -41,6 +41,7 @@ class ReplayResult(BaseModel):
     event_count: Annotated[int, Field(ge=1)]
     first_stream_position: Annotated[int, Field(ge=1)]
     last_stream_position: Annotated[int, Field(ge=1)]
+    last_event_fingerprint: Fingerprint
     snapshot_disposition: SnapshotDisposition
     snapshot_id: SnapshotId | None = None
     snapshot_findings: tuple[ReplayFinding, ...] = ()

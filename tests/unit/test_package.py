@@ -15,7 +15,10 @@ pytestmark = pytest.mark.unit
 def test_version_has_single_public_source() -> None:
     assert arch_runtime.__version__ == "0.1.0"
     assert arch_runtime.__version__ == version("arch-runtime")
-    assert arch_runtime.__all__ == ("__version__",)
+    assert arch_runtime.__all__ == tuple(sorted(arch_runtime.__all__))
+    assert {"Runtime", "RuntimeConfig", "GetProjectResult", "__version__"} <= set(
+        arch_runtime.__all__
+    )
 
 
 @pytest.mark.parametrize("error_type", [RuntimeConfigurationError, CorruptStoredRecordError])

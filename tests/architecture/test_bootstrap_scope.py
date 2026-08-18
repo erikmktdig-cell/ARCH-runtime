@@ -38,7 +38,7 @@ def test_reserved_namespace_contains_only_its_marker(namespace: str) -> None:
 
 def test_bootstrap_has_no_forbidden_runtime_artifacts() -> None:
     forbidden_suffixes = {".db", ".sqlite", ".sqlite3"}
-    forbidden_names = {"api.py", "cli.py", "runtime.py"}
+    forbidden_names = {"api.py", "cli.py"}
     files = [path for path in PACKAGE_ROOT.rglob("*") if path.is_file()]
     assert not {path.suffix for path in files} & forbidden_suffixes
     assert not {path.name for path in files} & forbidden_names

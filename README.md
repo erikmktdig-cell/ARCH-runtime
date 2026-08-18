@@ -6,8 +6,9 @@ without allowing infrastructure concerns to flow back into the kernel.
 
 ## Status
 
-R09 provides two synchronous mutation vertical slices, verified replay, explicit snapshots,
-explicit recovery, and stored-contract migration. `create_project`
+R10 exposes the approved runtime capabilities through one stable synchronous Python facade.
+`Runtime.open()` validates SQLite compatibility and composes project creation, transition,
+replay, snapshots, recovery, and stored-contract migration. `create_project`
 persists a validated aggregate and creation event. `apply_transition` loads and
 verifies that aggregate, evaluates the transition through K08, rechecks optimistic
 preconditions inside the write transaction, and atomically persists the projected
@@ -19,7 +20,18 @@ the immutable project stream verifies and an optimistic CAS succeeds.
 `dry_run_stored_contract_migration` plans explicit K10 routes without writes;
 `apply_stored_contract_migration` updates materialized aggregates and snapshots under
 CAS, preserves historical event rows, and appends a verified migration projection event.
-APIs, CLIs, and user interfaces remain intentionally unimplemented.
+HTTP APIs, CLIs, and user interfaces remain intentionally unimplemented.
+
+```python
+from arch_runtime import Runtime, RuntimeConfig
+
+with Runtime.open(RuntimeConfig("arch.db", initialize_schema=True)) as runtime:
+    result = runtime.create_project(command)
+    project = runtime.get_project(result.project_id)
+```
+
+Schema initialization is explicit and applies only to an empty database. Opening an older,
+newer, or altered schema fails closed; `Runtime.open()` never upgrades it implicitly.
 
 The dependency direction is fixed:
 
@@ -44,8 +56,9 @@ uv build
 uv run twine check dist/*
 ```
 
-The package root remains limited to `arch_runtime.__version__`. Infrastructure
-adapters are imported explicitly from `arch_runtime.persistence.sqlite`.
+The package root exposes the stable facade, immutable public commands/results, and structured
+runtime errors. Infrastructure adapters remain available only from
+`arch_runtime.persistence.sqlite` and never appear in facade method signatures.
 
 ## Frozen Boundaries
 
@@ -58,7 +71,7 @@ persistence.sqlite -> persistence, ports
 replay             -> arch_kernel, ports
 migrations         -> arch_kernel, ports
 ports              -> public arch_kernel contracts and typing only
-package root       -> metadata only
+package root       -> public contracts, errors, Runtime facade
 ```
 
 The idempotency contract distinguishes completed logical outcomes from
@@ -119,5 +132,12 @@ transaction. Historical event rows remain byte-for-byte immutable; their current
 projections live in the append-only audit event and are verified before replay. Logical migration
 rejections are exactly idempotent, while infrastructure failures roll back every surface.
 
-There is currently no functional Runtime API, automatic recovery during reads,
-automatic stored-contract migration, HTTP API, CLI, authentication, or UI.
+R10 adds immutable `RuntimeConfig`, verified `GetProjectResult`, tail fingerprint evidence on
+`ReplayResult`, and the synchronous `Runtime` facade. Each operation delegates to the approved
+R05-R09 service and creates its own SQLite Unit of Work; the facade retains no connection or
+transaction. Lifecycle is explicit and context-manager safe, empty-schema initialization is
+opt-in, normal reads perform full replay verification, and multiple instances may safely use the
+same file under existing optimistic concurrency rules.
+
+There is no automatic recovery during reads, automatic stored-contract migration, HTTP API,
+CLI, authentication, or UI.

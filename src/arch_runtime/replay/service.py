@@ -162,6 +162,7 @@ class ReplayService:
             event_count=len(decoded),
             first_stream_position=decoded[0].stored.stream_position,
             last_stream_position=decoded[-1].stored.stream_position,
+            last_event_fingerprint=decoded[-1].stored.event_fingerprint,
             snapshot_disposition=disposition,
             snapshot_id=(
                 selected_snapshot.snapshot_id

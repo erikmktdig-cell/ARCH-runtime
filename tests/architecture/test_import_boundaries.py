@@ -74,9 +74,15 @@ def test_layers_do_not_cross_forbidden_boundaries(
     assert violations == []
 
 
-def test_package_root_exposes_metadata_only() -> None:
+def test_package_root_exposes_only_stable_public_runtime_modules() -> None:
     tree = ast.parse((PACKAGE_ROOT / "__init__.py").read_text(encoding="utf-8"))
-    assert set(_modules(tree)) == {"arch_runtime.__about__"}
+    assert set(_modules(tree)) == {
+        "arch_runtime.__about__",
+        "arch_runtime.application",
+        "arch_runtime.errors",
+        "arch_runtime.replay",
+        "arch_runtime.runtime",
+    }
 
 
 def test_production_modules_have_no_import_time_calls_or_mutable_singletons() -> None:

@@ -43,3 +43,7 @@ All notable changes to this project will be documented in this file.
   replay, and the append-only `project.aggregate.contract_migrated` audit event.
 - Immutable historical event rows with verified current-contract projections carried by the
   migration audit event, plus fake and SQLite integration, rollback, and property tests.
+- Stable synchronous `Runtime` facade and immutable `RuntimeConfig` composing every approved
+  R05-R09 use case without exposing SQLite adapters or retaining shared transactions.
+- Verified `GetProjectResult`, public event-tail fingerprint evidence, explicit empty-schema
+  initialization, idempotent lifecycle closure, and real-file multi-instance SQLite E2E tests.

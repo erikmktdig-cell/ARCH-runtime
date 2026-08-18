@@ -15,6 +15,7 @@ from arch_kernel.contracts import (
     SemanticVersion,
     ValidationPipelineResult,
 )
+from arch_kernel.kernel import compute_content_fingerprint, compute_fingerprint
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from arch_runtime.ports.storage import Fingerprint, SnapshotId
@@ -54,6 +55,34 @@ class CreateProjectResult(BaseModel):
             raise ValueError("rejected creation cannot contain commit evidence")
         if self.success != self.validation_result.success:
             raise ValueError("application and K08 success values must agree")
+        return self
+
+
+class GetProjectResult(BaseModel):
+    """Verified public projection of one operational aggregate."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_name: Literal["arch.runtime.result.get_project"] = "arch.runtime.result.get_project"
+    contract_version: Literal["1.0.0"] = "1.0.0"
+    project_id: ProjectId
+    state: ProjectState
+    record_version: Annotated[int, Field(ge=1)]
+    record_fingerprint: Fingerprint
+    content_fingerprint: Fingerprint
+    stream_position: Annotated[int, Field(ge=1)]
+    stream_fingerprint: Fingerprint
+
+    @model_validator(mode="after")
+    def validate_evidence(self) -> Self:
+        if self.state.metadata.project_id != self.project_id:
+            raise ValueError("project state identity must match the requested project")
+        if self.state.record_version != self.record_version:
+            raise ValueError("project state version must match stored evidence")
+        if compute_fingerprint(self.state) != self.record_fingerprint:
+            raise ValueError("project state fingerprint must match stored evidence")
+        if compute_content_fingerprint(self.state) != self.content_fingerprint:
+            raise ValueError("project content fingerprint must match stored evidence")
         return self
 
 
