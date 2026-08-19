@@ -4,9 +4,10 @@
 the deterministic contracts published by [`arch-kernel`](https://github.com/erikmktdig-cell/ARCH-kernel)
 without allowing infrastructure concerns to flow back into the kernel.
 
-## Status
+## Version 0.1.0
 
-R10 exposes the approved runtime capabilities through one stable synchronous Python facade.
+Python 3.12 and 3.13 are supported. Version 0.1.0 exposes the approved runtime capabilities
+through one stable synchronous Python facade.
 `Runtime.open()` validates SQLite compatibility and composes project creation, transition,
 replay, snapshots, recovery, and stored-contract migration. `create_project`
 persists a validated aggregate and creation event. `apply_transition` loads and
@@ -32,6 +33,8 @@ with Runtime.open(RuntimeConfig("arch.db", initialize_schema=True)) as runtime:
 
 Schema initialization is explicit and applies only to an empty database. Opening an older,
 newer, or altered schema fails closed; `Runtime.open()` never upgrades it implicitly.
+SQL schema migration, stored-contract migration, and aggregate recovery are explicit operator
+actions. Normal open and read operations never migrate, recover, or repair stored evidence.
 
 The dependency direction is fixed:
 
@@ -42,7 +45,7 @@ arch-kernel  -X-> arch-runtime
 
 ## Development
 
-Python 3.12 and 3.13 are supported. The lock resolves `arch-kernel` from the
+The lock resolves `arch-kernel` from the
 published `v0.1.0` Git tag while the built package retains the public compatible
 range `arch-kernel>=0.1.0,<0.2.0`.
 

@@ -115,17 +115,17 @@ def test_wheel_imports_from_an_isolated_environment(tmp_path: Path) -> None:
         [
             str(python),
             "-I",
-            "-c",
-            "import arch_kernel, arch_runtime; "
-            "from arch_runtime.persistence.sqlite import load_sql_migrations; "
-            "print(arch_runtime.__version__, arch_kernel.__version__, len(load_sql_migrations()))",
+            str(ROOT / "scripts" / "installed_smoke.py"),
+            str(tmp_path / "smoke.db"),
         ],
         cwd=tmp_path,
         check=True,
         capture_output=True,
         text=True,
     )
-    assert completed.stdout.strip() == "0.1.0 0.1.0 2"
+    project_id, version = completed.stdout.strip().split()
+    assert project_id.startswith("PRJ-")
+    assert version == "1"
 
 
 def test_sdist_contains_reviewable_sources_and_no_generated_state(tmp_path: Path) -> None:
@@ -135,4 +135,16 @@ def test_sdist_contains_reviewable_sources_and_no_generated_state(tmp_path: Path
     assert any(name.endswith("/src/arch_runtime/py.typed") for name in names)
     assert any(name.endswith("/tests/architecture/test_import_boundaries.py") for name in names)
     assert any(name.endswith("/SECURITY.md") for name in names)
-    assert not any("/.venv/" in name or "/dist/" in name for name in names)
+    forbidden = {
+        ".coverage",
+        ".env",
+        ".git",
+        ".mypy_cache",
+        ".pytest_cache",
+        ".ruff_cache",
+        ".venv",
+        "dist",
+        "htmlcov",
+    }
+    assert not any(forbidden.intersection(Path(name).parts) for name in names)
+    assert not any(name.endswith((".db", ".sqlite", ".sqlite3")) for name in names)

@@ -20,6 +20,11 @@ def test_package_metadata_is_frozen() -> None:
     assert project["requires-python"] == ">=3.12,<3.14"
     assert project["dynamic"] == ["version"]
     assert project["dependencies"] == ["arch-kernel>=0.1.0,<0.2.0"]
+    assert project["urls"] == {
+        "Repository": "https://github.com/erikmktdig-cell/ARCH-runtime",
+        "Issues": "https://github.com/erikmktdig-cell/ARCH-runtime/issues",
+        "Changelog": "https://github.com/erikmktdig-cell/ARCH-runtime/blob/main/CHANGELOG.md",
+    }
 
 
 def test_python_requirement_and_classifiers_agree() -> None:
@@ -49,3 +54,8 @@ def test_ci_has_least_privilege_and_supported_matrix() -> None:
     assert "persist-credentials: false" in workflow
     assert "secrets." not in workflow
     assert "publish" not in workflow.lower()
+    assert "continue-on-error" not in workflow
+    assert "|| true" not in workflow
+    assert "pip-audit" in workflow
+    assert "uses: actions/checkout@v" not in workflow
+    assert "uses: actions/setup-python@v" not in workflow

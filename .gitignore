@@ -1,4 +1,6 @@
 .coverage
+.env
+.env.*
 .mypy_cache/
 .pytest_cache/
 .pytest-tmp/
@@ -9,5 +11,11 @@ build/
 dist/
 htmlcov/
 *.egg-info/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
 __pycache__/
 *.py[cod]
