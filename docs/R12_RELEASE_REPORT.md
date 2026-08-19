@@ -34,12 +34,16 @@ Four release-tooling defects were found and fixed:
 4. `build_release_manifest.py` could not load `scripts.release_tools` when executed by path.
    It now uses the same explicit repository bootstrap, covered by the path-execution regression.
 
-Current remote blocker:
+Remote closure evidence:
 
-- `erikmktdig-cell/ARCH-runtime` does not yet exist in the connected GitHub installation.
-- The available web session is not authenticated and `gh` is not installed.
-- Hosted CI, branch governance, Private Vulnerability Reporting, tag, and GitHub Release are
-  therefore **PENDING** and must not be marked PASS.
+- `erikmktdig-cell/ARCH-runtime` was created as a public repository.
+- Candidate commit `fd1c6088b772b654b6e7dd909054b2e802b0e6bd` was pushed to `main`.
+- Hosted CI run `32223152621` passed all seven jobs on that exact commit.
+- Private Vulnerability Reporting was enabled and verified in repository settings.
+- A protected `main` branch requires pull requests, current status checks, resolved
+  conversations, and linear history; force pushes, deletion, and bypass are disabled.
+- This documentation-only governance closure must pass the same protected PR workflow before
+  the final release tag is created.
 
 ## Local Quality Evidence
 
@@ -63,10 +67,10 @@ Current remote blocker:
 - Windows / Python 3.13.14 clean wheel install: PASS.
 - Windows / Python 3.12.13 clean sdist build and install: PASS.
 - Installed smoke: `Runtime.open`, create, get, close, reopen, and get: PASS.
-- Linux / Python 3.12: PENDING hosted CI.
-- Linux / Python 3.13: PENDING hosted CI.
-- Windows hosted CI / Python 3.12: PENDING hosted CI.
-- Windows hosted CI / Python 3.13: PENDING hosted CI.
+- Linux / Python 3.12: PASS in hosted CI run `32223152621`.
+- Linux / Python 3.13: PASS in hosted CI run `32223152621`.
+- Windows hosted CI / Python 3.12: PASS in hosted CI run `32223152621`.
+- Windows hosted CI / Python 3.13: PASS in hosted CI run `32223152621`.
 
 ## Dependency Audit
 
@@ -88,8 +92,8 @@ Current remote blocker:
 - Workflow token permissions: `contents: read` only.
 - Checkout credentials are not persisted.
 - Required workflow steps do not use `continue-on-error` or `|| true`.
-- Private Vulnerability Reporting: PENDING; `SECURITY.md` correctly keeps release blocked until
-  activation is verified.
+- Private Vulnerability Reporting: PASS; the repository setting and private advisory URL were
+  verified before updating `SECURITY.md`.
 
 ## Artifact Evidence
 
@@ -107,21 +111,22 @@ records the exact commit, tag, CI matrix, hashes, tests, and coverage without ci
 
 ## GitHub Governance
 
-- Remote URL: `https://github.com/erikmktdig-cell/ARCH-runtime` (target; not yet created).
-- Default branch: PENDING.
-- Required pull request policy: PENDING.
-- Required CI checks: PENDING.
-- Force-push/deletion protection: PENDING.
-- Private Vulnerability Reporting: PENDING.
+- Remote URL: `https://github.com/erikmktdig-cell/ARCH-runtime`.
+- Default branch: `main`.
+- Required pull request policy: ENABLED.
+- Required CI checks: seven GitHub Actions jobs from the supported platform matrix.
+- Up-to-date branch, conversation resolution, and linear history: REQUIRED.
+- Administrator bypass, force pushes, and branch deletion: DISABLED.
+- Private Vulnerability Reporting: ENABLED.
 
 ## Release State
 
-- Release commit: PENDING creation after final local review.
-- Hosted CI: PENDING.
+- Release commit: PENDING merge of the protected governance closure PR.
+- Hosted CI on candidate `fd1c6088b772b654b6e7dd909054b2e802b0e6bd`: PASS.
 - Tag `v0.1.0`: NOT CREATED.
-- Push: NOT PERFORMED.
+- Candidate push: PERFORMED.
 - GitHub Release: NOT CREATED.
-- Current state: **WP-R12 IMPLEMENTATION COMPLETE / RELEASE BLOCKED BY REMOTE GOVERNANCE**.
+- Current state: **RELEASE CANDIDATE READY / FINAL PROTECTED PR CI PENDING**.
 
 No R12 evidence above should be interpreted as architectural approval; final review remains with
 the project owner.
