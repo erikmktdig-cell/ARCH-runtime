@@ -44,6 +44,7 @@ def test_security_policy_uses_private_reporting() -> None:
     policy = (ROOT / "SECURITY.md").read_text(encoding="utf-8")
     assert "security/advisories/new" in policy
     assert "public issues" in policy
+    assert "not active" not in policy
 
 
 def test_ci_has_least_privilege_and_supported_matrix() -> None:
