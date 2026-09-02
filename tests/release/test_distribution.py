@@ -11,6 +11,7 @@ import pytest
 pytestmark = pytest.mark.release
 ROOT = Path(__file__).parents[2]
 KERNEL_GIT_SOURCE = "arch-kernel @ git+https://github.com/erikmktdig-cell/ARCH-kernel.git@v0.1.0"
+KERNEL_C01_COMMIT = "cea39add0a6785ad9f34362c476aa4c1488d3d13"
 
 
 def _build(output: Path) -> Path:
@@ -42,8 +43,8 @@ def _build_all(output: Path) -> tuple[Path, Path]:
 def _kernel_install_target(output: Path) -> str:
     checkout = ROOT.parent / "arch-kernel"
     if checkout.is_dir():
-        tags = subprocess.run(
-            ["git", "tag", "--points-at", "HEAD"],
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
             cwd=checkout,
             check=False,
             capture_output=True,
@@ -56,7 +57,7 @@ def _kernel_install_target(output: Path) -> str:
             capture_output=True,
             text=True,
         )
-        if "v0.1.0" in tags.stdout.splitlines() and not status.stdout.strip():
+        if head.stdout.strip() == KERNEL_C01_COMMIT and not status.stdout.strip():
             kernel_dist = output / "kernel-dist"
             subprocess.run(
                 ["uv", "build", "--wheel", "--out-dir", str(kernel_dist), str(checkout)],

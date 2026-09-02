@@ -12,10 +12,15 @@ from arch_kernel.contracts import (
     ProjectId,
     ProjectState,
     StatePatch,
+    TransitionDomain,
     TransitionRequest,
     ValidationPipelineResult,
+    WorkflowDefinition,
+    WorkflowId,
+    WorkflowStateRecord,
 )
 from arch_kernel.kernel import (
+    WorkflowDefinitionRegistry,
     apply_state_patch_dry_run,
     build_builtin_contract_registry,
     canonicalize_json,
@@ -46,6 +51,7 @@ from arch_runtime.replay.contracts import (
 
 _CREATED = "project.aggregate.created"
 _TRANSITION_APPLIED = "project.aggregate.transition_applied"
+_WORKFLOW_INITIALIZED = "project.aggregate.workflow_initialized"
 _RECOVERED = "project.aggregate.recovered"
 _CONTRACT_MIGRATED = "project.aggregate.contract_migrated"
 
@@ -80,9 +86,11 @@ class ReplayService:
         self,
         *,
         unit_of_work_factory: UnitOfWorkFactory,
+        workflow_definitions: WorkflowDefinitionRegistry | None = None,
         patch_runner: PatchRunner = apply_state_patch_dry_run,
     ) -> None:
         self._unit_of_work_factory = unit_of_work_factory
+        self._workflow_definitions = workflow_definitions or WorkflowDefinitionRegistry(())
         self._patch_runner = patch_runner
 
     def replay_project(self, project_id: ProjectId) -> ReplayResult:
@@ -146,6 +154,9 @@ class ReplayService:
                     _object(item.payload, "after", item.stored.project_id),
                     "recovery after evidence",
                 )
+                continue
+            if item.stored.event_type == _WORKFLOW_INITIALIZED:
+                state = self._apply_workflow_initialization(state, item)
                 continue
             if item.stored.event_type != _TRANSITION_APPLIED:
                 _fail(
@@ -245,6 +256,8 @@ class ReplayService:
             or validation.projected_state is None
         ):
             _fail("transition replay contracts disagree", item.stored.project_id)
+        if transition_request.target.domain is TransitionDomain.WORKFLOW_STATE:
+            self._require_workflow_binding(state, transition_request, item.stored.project_id)
         dry_run = self._patch_runner(state, patch, evaluated_at=validation.evaluated_at)
         if dry_run.projected_state is None or dry_run.projected_state != validation.projected_state:
             _fail(
@@ -252,6 +265,8 @@ class ReplayService:
                 item.stored.project_id,
             )
         projected = dry_run.projected_state
+        if transition_request.target.domain is TransitionDomain.WORKFLOW_STATE:
+            self._require_workflow_binding(projected, transition_request, item.stored.project_id)
         after = _object(payload, "after", item.stored.project_id)
         _require_state_evidence(projected, after, "transition after evidence")
         if (
@@ -259,6 +274,91 @@ class ReplayService:
             or item.stored.aggregate_version_after != projected.record_version
         ):
             _fail("transition event versions disagree with replayed state", item.stored.project_id)
+        return projected
+
+    def _require_workflow_binding(
+        self,
+        state: ProjectState,
+        request: TransitionRequest,
+        project_id: ProjectId,
+    ) -> None:
+        target_id = request.target.entity_id
+        if not isinstance(target_id, WorkflowId):
+            _fail("workflow transition target identity is invalid", project_id)
+        record = state.workflow_registry.get(target_id)
+        definition = (
+            None
+            if record is None
+            else self._workflow_definitions.get(record.namespace, record.definition_version)
+        )
+        if (
+            record is None
+            or definition is None
+            or record.workflow_id != definition.workflow_id
+            or record.definition_fingerprint != definition.definition_fingerprint()
+            or record.current_state not in definition.allowed_states
+        ):
+            _fail("workflow transition definition binding is invalid", project_id)
+
+    def _apply_workflow_initialization(
+        self, state: ProjectState, item: _DecodedEvent
+    ) -> ProjectState:
+        payload = item.payload
+        _require_state_evidence(
+            state,
+            _object(payload, "before", item.stored.project_id),
+            "workflow initialization before evidence",
+        )
+        try:
+            definition = WorkflowDefinition.model_validate_json(
+                canonicalize_json(payload.get("workflow_definition")), strict=True
+            )
+            record = WorkflowStateRecord.model_validate_json(
+                canonicalize_json(payload.get("workflow_state")), strict=True
+            )
+            validation = ValidationPipelineResult.model_validate_json(
+                canonicalize_json(payload.get("validation_result")), strict=True
+            )
+        except (ValidationError, ValueError, TypeError) as error:
+            _fail("workflow initialization payload is invalid", item.stored.project_id, cause=error)
+        configured = self._workflow_definitions.get(
+            definition.namespace, definition.definition_version
+        )
+        if (
+            configured != definition
+            or record.workflow_id != definition.workflow_id
+            or record.namespace != definition.namespace
+            or record.definition_version != definition.definition_version
+            or record.definition_fingerprint != definition.definition_fingerprint()
+            or record.current_state != definition.initial_state
+            or record.workflow_id in state.workflow_registry
+            or any(
+                existing.namespace == record.namespace
+                for existing in state.workflow_registry.values()
+            )
+            or record.record_version != 1
+            or record.state_version_created != state.record_version + 1
+        ):
+            _fail("workflow initialization authority is inconsistent", item.stored.project_id)
+        projected = state.model_copy(
+            update={
+                "updated_at": record.created_at,
+                "record_version": state.record_version + 1,
+                "state_version_updated": state.state_version_updated + 1,
+                "workflow_registry": {**state.workflow_registry, record.workflow_id: record},
+            }
+        )
+        if (
+            not validation.success
+            or item.stored.aggregate_version_before != state.record_version
+            or item.stored.aggregate_version_after != projected.record_version
+        ):
+            _fail("workflow initialization validation is inconsistent", item.stored.project_id)
+        _require_state_evidence(
+            projected,
+            _object(payload, "after", item.stored.project_id),
+            "workflow initialization after evidence",
+        )
         return projected
 
 
@@ -351,6 +451,7 @@ def _decode_stream(
             _fail("project stream must begin with the creation event", project_id)
         if index > 0 and stored.event_type not in {
             _TRANSITION_APPLIED,
+            _WORKFLOW_INITIALIZED,
             _RECOVERED,
             _CONTRACT_MIGRATED,
         }:

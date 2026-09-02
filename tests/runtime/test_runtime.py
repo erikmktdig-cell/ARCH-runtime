@@ -2,20 +2,28 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 import pytest
 from arch_kernel.contracts import (
     ChangeId,
     EventId,
+    FrozenJsonObject,
     PhaseStatus,
     ProjectId,
     Route,
     SemanticVersion,
     TransitionDomain,
     TransitionTarget,
+    WorkflowDefinition,
 )
-from arch_kernel.kernel import InvariantRegistry, TransitionRegistry, canonicalize_json
+from arch_kernel.kernel import (
+    InvariantRegistry,
+    TransitionRegistry,
+    WorkflowDefinitionRegistry,
+    canonicalize_json,
+    compute_content_fingerprint,
+)
 
 from arch_runtime import (
     ApplyStoredContractMigrationCommand,
@@ -23,6 +31,7 @@ from arch_runtime import (
     CreateProjectCommand,
     CreateSnapshotCommand,
     GetProjectResult,
+    InitializeWorkflowCommand,
     PlanStoredContractMigrationCommand,
     ProjectNotFoundError,
     RecoverAggregateCommand,
@@ -41,10 +50,12 @@ from arch_runtime.persistence.sqlite import (
 from tests.application.conftest import ProjectIds
 from tests.application.test_apply_transition import _definition
 from tests.application.test_snapshots import SnapshotIds
+from tests.application.test_workflows import workflow_definition, workflow_transition
 from tests.fakes.adapters import FrozenClock
 
 pytestmark = pytest.mark.sqlite
-CURRENT = SemanticVersion.parse("1.0.0")
+PROJECT_CURRENT = SemanticVersion.parse("2.0.0")
+EVENT_CURRENT = SemanticVersion.parse("1.0.0")
 
 
 class ProjectEvidence(Protocol):
@@ -60,6 +71,7 @@ class EventIds:
                 EventId("EVT-01HZX7M3FQ1T2Q9V8Y6K4C2R10"),
                 EventId("EVT-01HZX7M3FQ1T2Q9V8Y6K4C2R11"),
                 EventId("EVT-01HZX7M3FQ1T2Q9V8Y6K4C2R12"),
+                EventId("EVT-01HZX7M3FQ1T2Q9V8Y6K4C2R13"),
             )
         )
 
@@ -68,6 +80,7 @@ class EventIds:
 
 
 def _config(path: Path, clock: FrozenClock, *, initialize: bool) -> RuntimeConfig:
+    workflow = workflow_definition()
     return RuntimeConfig(
         path,
         initialize_schema=initialize,
@@ -76,7 +89,11 @@ def _config(path: Path, clock: FrozenClock, *, initialize: bool) -> RuntimeConfi
         project_ids=ProjectIds(),
         event_ids=EventIds(),
         snapshot_ids=SnapshotIds(),
-        transition_registry=TransitionRegistry((_definition(),)),
+        transition_registry=TransitionRegistry(
+            (_definition(), workflow_transition(workflow)),
+            workflow_definitions=(workflow,),
+        ),
+        workflow_definition_registry=WorkflowDefinitionRegistry((workflow,)),
         invariant_registry=InvariantRegistry(()),
         snapshot_policy=SnapshotPolicy(every_n_versions=1),
     )
@@ -148,6 +165,66 @@ def test_public_runtime_executes_all_approved_use_cases_against_real_sqlite(
                     canonicalize_json(loaded_data | {field: value}), strict=True
                 )
 
+        definition: WorkflowDefinition = workflow_definition()
+        initialized = runtime.initialize_workflow(
+            InitializeWorkflowCommand(
+                idempotency_key="runtime:workflow:init:001",
+                project_id=created.project_id,
+                workflow_id=definition.workflow_id,
+                workflow_namespace=definition.namespace,
+                definition_version=definition.definition_version,
+                definition_fingerprint=definition.definition_fingerprint(),
+                expected_record_version=loaded.record_version,
+                expected_record_fingerprint=loaded.record_fingerprint,
+                expected_content_fingerprint=loaded.content_fingerprint,
+                actor_id="user:runtime",
+            )
+        )
+        assert initialized.success
+        assert initialized.changed
+        assert (
+            runtime.initialize_workflow(
+                InitializeWorkflowCommand(
+                    idempotency_key="runtime:workflow:init:001",
+                    project_id=created.project_id,
+                    workflow_id=definition.workflow_id,
+                    workflow_namespace=definition.namespace,
+                    definition_version=definition.definition_version,
+                    definition_fingerprint=definition.definition_fingerprint(),
+                    expected_record_version=loaded.record_version,
+                    expected_record_fingerprint=loaded.record_fingerprint,
+                    expected_content_fingerprint=loaded.content_fingerprint,
+                    actor_id="user:runtime",
+                )
+            )
+            == initialized
+        )
+        workflow_current = runtime.get_project(created.project_id)
+        workflow_record = workflow_current.state.workflow_registry[definition.workflow_id]
+        workflow_changed = runtime.apply_transition(
+            ApplyTransitionCommand(
+                idempotency_key="runtime:workflow:transition:001",
+                project_id=created.project_id,
+                request_id=ChangeId("CHG-01HZX7M3FQ1T2Q9V8Y6K4C2R11"),
+                target=TransitionTarget(
+                    domain=TransitionDomain.WORKFLOW_STATE,
+                    entity_id=definition.workflow_id,
+                ),
+                transition_key="workflow.start_delivery",
+                expected_from_state="queued",
+                expected_record_version=workflow_current.record_version,
+                expected_record_fingerprint=workflow_current.record_fingerprint,
+                expected_content_fingerprint=workflow_current.content_fingerprint,
+                expected_target_record_version=workflow_record.record_version,
+                expected_target_content_fingerprint=compute_content_fingerprint(workflow_record),
+                metadata=cast(FrozenJsonObject, {"source": "runtime-e2e"}),
+                actor_id="user:runtime",
+            )
+        )
+        assert workflow_changed.success
+        assert workflow_changed.changed
+        loaded = runtime.get_project(created.project_id)
+
         transitioned = runtime.apply_transition(_transition(created.project_id, loaded))
         assert transitioned.success
         assert transitioned.changed
@@ -185,8 +262,8 @@ def test_public_runtime_executes_all_approved_use_cases_against_real_sqlite(
 
         plan = PlanStoredContractMigrationCommand(
             project_id=created.project_id,
-            target_project_version=CURRENT,
-            target_event_version=CURRENT,
+            target_project_version=PROJECT_CURRENT,
+            target_event_version=EVENT_CURRENT,
             expected_record_version=current.record_version,
             expected_record_fingerprint=current.record_fingerprint,
             expected_content_fingerprint=current.content_fingerprint,
@@ -282,6 +359,7 @@ def test_runtime_configuration_and_public_signatures_hide_sqlite_types(tmp_path:
         Runtime.create_project,
         Runtime.get_project,
         Runtime.apply_transition,
+        Runtime.initialize_workflow,
         Runtime.replay_project,
         Runtime.create_snapshot,
         Runtime.recover_project,

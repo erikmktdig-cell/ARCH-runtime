@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Generic workflow authority through an explicit immutable `WorkflowDefinitionRegistry`,
+  `InitializeWorkflowCommand`, `InitializeWorkflowResult`, and
+  `Runtime.initialize_workflow()`.
+- Atomic workflow initialization with canonical event history, exact idempotency,
+  aggregate CAS, replay, snapshot, recovery, tamper, and SQLite coverage.
+- Generic workflow transitions through the existing `Runtime.apply_transition()` API with
+  configured definition binding and workflow-record optimistic preconditions.
+- Explicit ProjectState 1.0.0 to 2.0.0 stored-contract migration using the existing K10
+  planning/application path, preserving historical event rows and producing an empty
+  workflow registry until governed initialization.
+
+### Changed
+
+- New projects now persist ProjectState 2.0.0 with an explicit workflow registry.
+- Runtime replay and stored-contract migration projection understand authoritative generic
+  workflow initialization without changing phase-status semantics.
+
 ## [0.1.0] - 2026-08-18
 
 ### Added

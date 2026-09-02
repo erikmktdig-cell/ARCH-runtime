@@ -19,6 +19,8 @@ EXPECTED_PUBLIC_API = {
     "CreateSnapshotResult",
     "GetProjectResult",
     "IdempotencyConflictError",
+    "InitializeWorkflowCommand",
+    "InitializeWorkflowResult",
     "PersistenceError",
     "PlanStoredContractMigrationCommand",
     "ProjectAlreadyExistsError",
@@ -35,10 +37,11 @@ EXPECTED_PUBLIC_API = {
     "StoredMigrationRequiredError",
     "UnsupportedRuntimeSchemaError",
     "UnsupportedStoredContractError",
+    "WorkflowInitializationDisposition",
     "__version__",
 }
 
 
-def test_public_api_is_frozen_at_r10_surface() -> None:
+def test_public_api_is_frozen_at_c02_surface() -> None:
     assert set(arch_runtime.__all__) == EXPECTED_PUBLIC_API
     assert not any("sqlite" in name.lower() for name in arch_runtime.__all__)

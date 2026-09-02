@@ -59,6 +59,7 @@ from arch_runtime.ports import (
 )
 
 _OPERATION = "project.contract_migrate"
+_CREATED_EVENT = "project.aggregate.created"
 
 
 class TransactionReplayVerifier(Protocol):
@@ -139,7 +140,14 @@ class StoredContractMigrationService:
         for event in events:
             if migrated_events.get(event.event_fingerprint) == str(command.target_event_version):
                 continue
-            item = self._event_item(event, command.target_event_version, event_name, now)
+            item = self._event_item(
+                event,
+                command.target_event_version,
+                event_name,
+                command.target_project_version,
+                project_name,
+                now,
+            )
             if item is not None:
                 items.append(item)
         for snapshot in snapshots:
@@ -237,11 +245,34 @@ class StoredContractMigrationService:
         stored: StoredEvent,
         target_version: SemanticVersion,
         canonical_name: str,
+        target_project_version: SemanticVersion,
+        project_canonical_name: str,
         now: datetime,
     ) -> StoredContractMigrationItem | None:
         payload = _verified_json(stored.event_json, stored.event_fingerprint, stored.project_id)
         _require_event_identity(stored, payload)
         source = self._registration(canonical_name, stored.schema_version, stored.project_id)
+        if stored.schema_version == target_version and stored.event_type == _CREATED_EVENT:
+            embedded = _embedded_created_state(payload, stored.project_id)
+            embedded_version = SemanticVersion.parse(str(embedded.get("contract_version")))
+            if embedded_version != target_project_version:
+                result = self._run(
+                    project_canonical_name,
+                    embedded_version,
+                    target_project_version,
+                    embedded,
+                    now,
+                )
+                target = self._registration(
+                    project_canonical_name, target_project_version, stored.project_id
+                )
+                return _embedded_created_event_item(
+                    stored,
+                    payload,
+                    source.descriptor.schema_fingerprint,
+                    target.descriptor.schema_fingerprint,
+                    result,
+                )
         if stored.schema_version == target_version:
             return None
         result = self._run(canonical_name, stored.schema_version, target_version, payload, now)
@@ -458,6 +489,54 @@ def _verified_json(payload: bytes, fingerprint: str, project_id: ProjectId) -> d
     if canonicalize_json(value) != payload or compute_fingerprint(value) != fingerprint:
         _corrupt("stored contract evidence is not canonical", project_id)
     return cast(dict[str, Any], value)
+
+
+def _embedded_created_state(envelope: Mapping[str, Any], project_id: ProjectId) -> dict[str, Any]:
+    event_payload = envelope.get("payload")
+    state = event_payload.get("state") if isinstance(event_payload, dict) else None
+    if not isinstance(state, dict):
+        _corrupt("stored creation event state is invalid", project_id)
+    return cast(dict[str, Any], state)
+
+
+def _embedded_created_event_item(
+    stored: StoredEvent,
+    envelope: dict[str, Any],
+    event_schema_fingerprint: str,
+    project_schema_fingerprint: str,
+    result: MigrationResult,
+) -> StoredContractMigrationItem:
+    if not result.success:
+        return StoredContractMigrationItem(
+            kind=StoredContractKind.EVENT,
+            record_id=str(stored.event_id),
+            source_version=stored.schema_version,
+            target_version=stored.schema_version,
+            before_schema_fingerprint=event_schema_fingerprint,
+            before_record_fingerprint=stored.event_fingerprint,
+            migration_result=result,
+        )
+    assert result.final_payload is not None
+    migrated_state = json.loads(canonicalize_json(result.final_payload))
+    projected = json.loads(canonicalize_json(envelope))
+    event_payload = projected["payload"]
+    event_payload["state"] = migrated_state
+    event_payload["record_fingerprint"] = compute_fingerprint(migrated_state)
+    event_payload["content_fingerprint"] = compute_content_fingerprint(migrated_state)
+    event_payload["contract_version"] = migrated_state["contract_version"]
+    event_payload["schema_fingerprint"] = project_schema_fingerprint
+    return StoredContractMigrationItem(
+        kind=StoredContractKind.EVENT,
+        record_id=str(stored.event_id),
+        source_version=stored.schema_version,
+        target_version=stored.schema_version,
+        before_schema_fingerprint=event_schema_fingerprint,
+        before_record_fingerprint=stored.event_fingerprint,
+        after_schema_fingerprint=event_schema_fingerprint,
+        after_record_fingerprint=compute_fingerprint(projected),
+        after_payload=cast(FrozenJsonObject, projected),
+        migration_result=result,
+    )
 
 
 def _require_event_identity(stored: StoredEvent, payload: Mapping[str, Any]) -> None:

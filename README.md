@@ -23,6 +23,22 @@ the immutable project stream verifies and an optimistic CAS succeeds.
 CAS, preserves historical event rows, and appends a verified migration projection event.
 HTTP APIs, CLIs, and user interfaces remain intentionally unimplemented.
 
+## C02 Development State
+
+The unreleased C02 API accepts an explicit immutable
+`WorkflowDefinitionRegistry` through `RuntimeConfig`. `Runtime.initialize_workflow()`
+resolves only configured definitions, derives the initial state from that definition,
+and atomically persists ProjectState, `project.aggregate.workflow_initialized`, and
+idempotency evidence. Generic workflow transitions continue through
+`Runtime.apply_transition()`; persisted workflow identity, version, fingerprint, state,
+and target CAS evidence are checked against the configured registry.
+
+ProjectState 1.0.0 data is upgraded to 2.0.0 only through the existing explicit
+stored-contract migration plan/apply flow. The migration creates an empty
+`workflow_registry`; it never infers a consumer workflow. Generic workflow state is
+independent from project phase status: phase transitions retain their existing domain
+and workflow transitions use `TransitionDomain.WORKFLOW_STATE`.
+
 ```python
 from arch_runtime import Runtime, RuntimeConfig
 
@@ -45,9 +61,12 @@ arch-kernel  -X-> arch-runtime
 
 ## Development
 
-The lock resolves `arch-kernel` from the
-published `v0.1.0` Git tag while the built package retains the public compatible
-range `arch-kernel>=0.1.0,<0.2.0`.
+The committed lock resolves `arch-kernel` from the published `v0.1.0` Git tag while
+the built package retains the public compatible range `arch-kernel>=0.1.0,<0.2.0`.
+C02 development and tests require the exact approved local C01 commit
+`cea39add0a6785ad9f34362c476aa4c1488d3d13` as an explicit editable environment
+override. That local path is not recorded in `pyproject.toml`, the lock, wheel, or sdist;
+release dependency compatibility remains owned by C04.
 
 ```console
 uv sync --frozen --all-groups

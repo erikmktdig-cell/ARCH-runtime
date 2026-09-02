@@ -11,10 +11,13 @@ from arch_runtime.application import (
     CreateSnapshotCommand,
     CreateSnapshotResult,
     GetProjectResult,
+    InitializeWorkflowCommand,
+    InitializeWorkflowResult,
     PlanStoredContractMigrationCommand,
     RecoverAggregateCommand,
     RecoverAggregateResult,
     StoredContractMigrationDryRunResult,
+    WorkflowInitializationDisposition,
 )
 from arch_runtime.errors import (
     ArchRuntimeError,
@@ -48,6 +51,8 @@ __all__ = (
     "CreateSnapshotResult",
     "GetProjectResult",
     "IdempotencyConflictError",
+    "InitializeWorkflowCommand",
+    "InitializeWorkflowResult",
     "PersistenceError",
     "PlanStoredContractMigrationCommand",
     "ProjectAlreadyExistsError",
@@ -64,5 +69,6 @@ __all__ = (
     "StoredMigrationRequiredError",
     "UnsupportedRuntimeSchemaError",
     "UnsupportedStoredContractError",
+    "WorkflowInitializationDisposition",
     "__version__",
 )
