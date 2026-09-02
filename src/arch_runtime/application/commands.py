@@ -14,6 +14,8 @@ from arch_kernel.contracts import (
     SemanticVersion,
     TransitionId,
     TransitionTarget,
+    WorkflowId,
+    WorkflowNamespace,
 )
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
@@ -138,6 +140,48 @@ class ApplyTransitionCommand(BaseModel):
         if (self.transition_id is None) == (self.transition_key is None):
             raise ValueError("exactly one transition selector is required")
         return self
+
+    def request_payload(self) -> dict[str, object]:
+        """Return normalized logical intent without its idempotency scope key."""
+
+        return self.model_dump(mode="json", exclude={"idempotency_key"})
+
+
+class InitializeWorkflowCommand(BaseModel):
+    """Initialize one configured generic workflow in an existing project."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_name: Literal["arch.runtime.command.initialize_workflow"] = (
+        "arch.runtime.command.initialize_workflow"
+    )
+    contract_version: Literal["1.0.0"] = "1.0.0"
+    idempotency_key: Annotated[str, StringConstraints(min_length=1, max_length=512)]
+    project_id: ProjectId
+    workflow_id: WorkflowId
+    workflow_namespace: WorkflowNamespace
+    definition_version: SemanticVersion
+    definition_fingerprint: Fingerprint
+    expected_record_version: Annotated[int, Field(ge=1)]
+    expected_record_fingerprint: Fingerprint
+    expected_content_fingerprint: Fingerprint
+    actor_type: ActorType = ActorType.HUMAN
+    actor_id: Annotated[str, StringConstraints(min_length=1, max_length=200)]
+    actor_display_name: Annotated[str, StringConstraints(min_length=1, max_length=200)] | None = (
+        None
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        if not isinstance(value, dict):
+            return value
+        normalized = dict(value)
+        for field in ("idempotency_key", "actor_id", "actor_display_name"):
+            item = normalized.get(field)
+            if isinstance(item, str):
+                normalized[field] = item.strip()
+        return normalized
 
     def request_payload(self) -> dict[str, object]:
         """Return normalized logical intent without its idempotency scope key."""

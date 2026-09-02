@@ -57,7 +57,8 @@ from tests.replay.conftest import ReplaySeed, replay_seed, save_snapshot  # noqa
 
 pytestmark = pytest.mark.unit
 OLD = SemanticVersion.parse("0.9.0")
-CURRENT = SemanticVersion.parse("1.0.0")
+PROJECT_CURRENT = SemanticVersion.parse("2.0.0")
+EVENT_CURRENT = SemanticVersion.parse("1.0.0")
 
 
 class HistoricalProjectState(ProjectState):
@@ -116,6 +117,7 @@ def _definition(
     key: str,
     canonical_name: str,
     path: str,
+    target_version: SemanticVersion,
 ) -> MigrationDefinition:
     return MigrationDefinition(
         migration_id=MigrationId.from_str(migration_id),
@@ -124,7 +126,7 @@ def _definition(
         description="Upgrade one historical runtime fixture to the current contract.",
         canonical_name=canonical_name,
         source_version=OLD,
-        target_version=CURRENT,
+        target_version=target_version,
         direction=MigrationDirection.UPGRADE,
         status=MigrationStatus.ACTIVE,
         priority=0,
@@ -132,12 +134,12 @@ def _definition(
             MigrationOperation(
                 operation_type=MigrationOperationType.REPLACE,
                 path=MigrationPath.parse(path),
-                value="1.0.0",
+                value=str(target_version),
             ),
         ),
         lossless=True,
         reversible=False,
-        contract_version=CURRENT,
+        contract_version=EVENT_CURRENT,
         schema_uri="https://schemas.arch.local/arch.runtime/test_migration/1.0.0",
     )
 
@@ -157,12 +159,14 @@ def _registries() -> tuple[ContractRegistry, MigrationRegistry, str, str]:
             key="runtime.project_state.upgrade",
             canonical_name=project.descriptor.canonical_name,
             path="/contract_version",
+            target_version=PROJECT_CURRENT,
         ),
         _definition(
             migration_id="MIG-01ARZ3NDEKTSV4RRFFQ69G5FAW",
             key="runtime.event_envelope.upgrade",
             canonical_name=event.descriptor.canonical_name,
             path="/schema_version",
+            target_version=EVENT_CURRENT,
         ),
     )
     return (
@@ -229,8 +233,8 @@ def _plan(seed: ReplaySeed) -> PlanStoredContractMigrationCommand:
     assert aggregate is not None
     return PlanStoredContractMigrationCommand(
         project_id=seed.project_id,
-        target_project_version=CURRENT,
-        target_event_version=CURRENT,
+        target_project_version=PROJECT_CURRENT,
+        target_event_version=EVENT_CURRENT,
         expected_record_version=aggregate.record_version,
         expected_record_fingerprint=aggregate.record_fingerprint,
         expected_content_fingerprint=aggregate.content_fingerprint,
@@ -329,9 +333,9 @@ def test_apply_migrates_materialized_records_and_preserves_historical_event_rows
     assert result.event_id is not None
     aggregate = replay_seed.uow.projects.get(replay_seed.project_id)
     assert aggregate is not None
-    assert aggregate.contract_version == CURRENT
+    assert aggregate.contract_version == PROJECT_CURRENT
     snapshots = replay_seed.uow.snapshots.list_for_project(replay_seed.project_id)
-    assert snapshots[0].contract_version == CURRENT
+    assert snapshots[0].contract_version == PROJECT_CURRENT
     assert replay_seed.uow._events.records[:2] == original_events
     assert replay_seed.uow._events.records[-1].event_type == ("project.aggregate.contract_migrated")
     assert (

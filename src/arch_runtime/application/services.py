@@ -269,8 +269,8 @@ def _build_initial_state(
     )
     return ProjectState(
         contract_name="project_state",
-        contract_version=_version(),
-        schema_uri="urn:arch:contracts:project_state:1.0.0",
+        contract_version=SemanticVersion.parse("2.0.0"),
+        schema_uri="urn:arch:contracts:project_state:2.0.0",
         created_at=now,
         updated_at=now,
         record_version=1,
@@ -279,6 +279,7 @@ def _build_initial_state(
         metadata=metadata,
         profile=profile,
         lifecycle=lifecycle,
+        workflow_registry={},
     )
 
 

@@ -20,8 +20,9 @@ from arch_runtime.ports import StoredSnapshot, UnitOfWorkFactory
 from arch_runtime.replay import ReplayService
 from tests.application.conftest import EventIds, ProjectIds
 from tests.application.test_contract_migrations import (
-    CURRENT,
+    EVENT_CURRENT,
     OLD,
+    PROJECT_CURRENT,
     MigrationEventIds,
     _registries,
 )
@@ -118,8 +119,8 @@ def test_sqlite_migrates_contracts_without_rewriting_historical_event_rows(
     assert historical is not None
     plan = PlanStoredContractMigrationCommand(
         project_id=created.project_id,
-        target_project_version=CURRENT,
-        target_event_version=CURRENT,
+        target_project_version=PROJECT_CURRENT,
+        target_event_version=EVENT_CURRENT,
         expected_record_version=historical.record_version,
         expected_record_fingerprint=historical.record_fingerprint,
         expected_content_fingerprint=historical.content_fingerprint,
@@ -152,8 +153,8 @@ def test_sqlite_migrates_contracts_without_rewriting_historical_event_rows(
         events = unit_of_work.events.read_stored_stream(created.project_id)
         snapshots = unit_of_work.snapshots.list_for_project(created.project_id)
     assert current is not None
-    assert current.contract_version == CURRENT
-    assert snapshots[0].contract_version == CURRENT
+    assert current.contract_version == PROJECT_CURRENT
+    assert snapshots[0].contract_version == PROJECT_CURRENT
     assert events[0].event_json == old_event_json
     assert events[0].event_fingerprint == old_event_fingerprint
     assert events[-1].event_type == "project.aggregate.contract_migrated"

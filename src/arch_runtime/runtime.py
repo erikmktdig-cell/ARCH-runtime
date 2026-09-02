@@ -14,6 +14,7 @@ from arch_kernel.kernel import (
     InvariantRegistry,
     MigrationRegistry,
     TransitionRegistry,
+    WorkflowDefinitionRegistry,
     build_builtin_contract_registry,
 )
 
@@ -28,6 +29,9 @@ from arch_runtime.application import (
     CreateProjectService,
     CreateSnapshotCommand,
     CreateSnapshotResult,
+    InitializeWorkflowCommand,
+    InitializeWorkflowResult,
+    InitializeWorkflowService,
     PlanStoredContractMigrationCommand,
     RecoverAggregateCommand,
     RecoverAggregateResult,
@@ -90,6 +94,9 @@ class RuntimeConfig:
     event_ids: EventIdGenerator | None = None
     snapshot_ids: SnapshotIdGenerator | None = None
     transition_registry: TransitionRegistry = field(default_factory=lambda: TransitionRegistry(()))
+    workflow_definition_registry: WorkflowDefinitionRegistry = field(
+        default_factory=lambda: WorkflowDefinitionRegistry(())
+    )
     invariant_registry: InvariantRegistry | None = None
     contract_registry: ContractRegistry | None = None
     migration_registry: MigrationRegistry | None = None
@@ -115,6 +122,7 @@ class Runtime:
         config: RuntimeConfig,
         create_projects: CreateProjectService,
         transitions: ApplyTransitionService,
+        workflow_initialization: InitializeWorkflowService,
         replay: ReplayService,
         snapshots: SnapshotService,
         recovery: RecoveryService,
@@ -123,6 +131,7 @@ class Runtime:
         self._config = config
         self._create_projects = create_projects
         self._transitions = transitions
+        self._workflow_initialization = workflow_initialization
         self._replay = replay
         self._snapshots = snapshots
         self._recovery = recovery
@@ -151,7 +160,15 @@ class Runtime:
         def factory() -> SQLiteUnitOfWork:
             return SQLiteUnitOfWork(sqlite_config, clock=clock)
 
-        replay = ReplayService(unit_of_work_factory=factory)
+        workflow_definitions = resolved.workflow_definition_registry
+        transitions = TransitionRegistry(
+            resolved.transition_registry.definitions,
+            workflow_definitions=workflow_definitions.definitions,
+        )
+        replay = ReplayService(
+            unit_of_work_factory=factory,
+            workflow_definitions=workflow_definitions,
+        )
         project_ids = resolved.project_ids or _ProjectIds()
         event_ids = resolved.event_ids or _EventIds()
         snapshot_ids = resolved.snapshot_ids or _SnapshotIds()
@@ -174,7 +191,14 @@ class Runtime:
                 unit_of_work_factory=factory,
                 clock=clock,
                 event_ids=event_ids,
-                transition_registry=resolved.transition_registry,
+                transition_registry=transitions,
+                invariant_registry=resolved.invariant_registry,
+            ),
+            workflow_initialization=InitializeWorkflowService(
+                unit_of_work_factory=factory,
+                clock=clock,
+                event_ids=event_ids,
+                workflow_definitions=workflow_definitions,
                 invariant_registry=resolved.invariant_registry,
             ),
             replay=replay,
@@ -241,6 +265,10 @@ class Runtime:
     def apply_transition(self, command: ApplyTransitionCommand) -> ApplyTransitionResult:
         self._require_open()
         return self._transitions.apply_transition(command)
+
+    def initialize_workflow(self, command: InitializeWorkflowCommand) -> InitializeWorkflowResult:
+        self._require_open()
+        return self._workflow_initialization.initialize_workflow(command)
 
     def replay_project(self, project_id: ProjectId) -> ReplayResult:
         self._require_open()

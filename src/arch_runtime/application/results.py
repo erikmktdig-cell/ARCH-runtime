@@ -14,6 +14,8 @@ from arch_kernel.contracts import (
     ProjectState,
     SemanticVersion,
     ValidationPipelineResult,
+    WorkflowId,
+    WorkflowStateRecord,
 )
 from arch_kernel.kernel import compute_content_fingerprint, compute_fingerprint
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -138,6 +140,88 @@ class ApplyTransitionResult(BaseModel):
                 self.before_content_fingerprint,
             ):
                 raise ValueError("no-op transition must preserve aggregate evidence")
+        return self
+
+
+class WorkflowInitializationDisposition(StrEnum):
+    """Closed outcomes for authoritative workflow initialization."""
+
+    INITIALIZED = "initialized"
+    ALREADY_INITIALIZED = "already_initialized"
+    UNKNOWN_DEFINITION = "unknown_definition"
+    DEFINITION_MISMATCH = "definition_mismatch"
+    CONFLICTING_WORKFLOW_IDENTITY = "conflicting_workflow_identity"
+    NAMESPACE_ALREADY_INITIALIZED = "namespace_already_initialized"
+    VALIDATION_REJECTED = "validation_rejected"
+
+
+class InitializeWorkflowResult(BaseModel):
+    """Canonical idempotent result of one workflow initialization request."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    contract_name: Literal["arch.runtime.result.initialize_workflow"] = (
+        "arch.runtime.result.initialize_workflow"
+    )
+    contract_version: Literal["1.0.0"] = "1.0.0"
+    success: bool
+    changed: bool
+    disposition: WorkflowInitializationDisposition
+    project_id: ProjectId
+    workflow_id: WorkflowId
+    workflow_state: WorkflowStateRecord | None = None
+    validation_result: ValidationPipelineResult | None = None
+    before_record_version: Annotated[int, Field(ge=1)]
+    before_record_fingerprint: Fingerprint
+    before_content_fingerprint: Fingerprint
+    after_record_version: Annotated[int, Field(ge=1)] | None = None
+    after_record_fingerprint: Fingerprint | None = None
+    after_content_fingerprint: Fingerprint | None = None
+    event_id: EventId | None = None
+    stream_position: Annotated[int, Field(ge=1)] | None = None
+
+    @model_validator(mode="after")
+    def validate_outcome(self) -> Self:
+        after = (
+            self.after_record_version,
+            self.after_record_fingerprint,
+            self.after_content_fingerprint,
+        )
+        event = (self.event_id, self.stream_position)
+        if not self.success:
+            if self.changed or self.workflow_state is not None:
+                raise ValueError("rejected initialization cannot expose workflow state")
+            if any(value is not None for value in (*after, *event)):
+                raise ValueError("rejected initialization cannot contain commit evidence")
+            if self.disposition is WorkflowInitializationDisposition.VALIDATION_REJECTED and (
+                self.validation_result is None or self.validation_result.success
+            ):
+                raise ValueError("validation rejection requires failed pipeline evidence")
+            return self
+        if self.validation_result is None or not self.validation_result.success:
+            raise ValueError("successful initialization requires successful pipeline evidence")
+        if self.workflow_state is None or self.workflow_state.workflow_id != self.workflow_id:
+            raise ValueError("successful initialization requires matching workflow state")
+        if any(value is None for value in after):
+            raise ValueError("successful initialization requires after-state evidence")
+        if self.changed:
+            if self.disposition is not WorkflowInitializationDisposition.INITIALIZED:
+                raise ValueError("changed initialization must use initialized disposition")
+            if any(value is None for value in event):
+                raise ValueError("changed initialization requires event evidence")
+            if self.after_record_version != self.before_record_version + 1:
+                raise ValueError("changed initialization must increment the aggregate once")
+        else:
+            if self.disposition is not WorkflowInitializationDisposition.ALREADY_INITIALIZED:
+                raise ValueError("successful no-op must report already initialized")
+            if any(value is not None for value in event):
+                raise ValueError("no-op initialization cannot append an event")
+            if after != (
+                self.before_record_version,
+                self.before_record_fingerprint,
+                self.before_content_fingerprint,
+            ):
+                raise ValueError("no-op initialization must preserve aggregate evidence")
         return self
 
 

@@ -28,6 +28,7 @@ def test_reserved_namespace_contains_only_its_marker(namespace: str) -> None:
             "recovery.py",
             "services.py",
             "snapshots.py",
+            "workflows.py",
         },
         "persistence": {"__init__.py", "sqlite"},
         "replay": {"__init__.py", "contracts.py", "service.py"},
@@ -76,3 +77,21 @@ def test_r04_sqlite_adapter_surface_is_exact() -> None:
         "sql",
         "unit_of_work.py",
     }
+
+
+def test_c02_remains_generic_and_has_no_consumer_workflow_vocabulary() -> None:
+    source = "\n".join(path.read_text(encoding="utf-8") for path in PACKAGE_ROOT.rglob("*.py"))
+    forbidden = {
+        "arch_web",
+        "WebLifecycleStatus",
+        "DRAFT",
+        "REQUIREMENTS_APPROVED",
+        "ARCHITECTURE_APPROVED",
+        "UI_APPROVED",
+        "IMPLEMENTATION_READY",
+        "IMPLEMENTING",
+        "TESTING",
+        "RELEASE_READY",
+        "DEPLOYED",
+    }
+    assert all(token not in source for token in forbidden)
