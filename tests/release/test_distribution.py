@@ -1,17 +1,15 @@
+import json
 import os
 import subprocess
-import sys
 import tarfile
-import venv
 import zipfile
 from pathlib import Path
 
 import pytest
+from scripts.verify_installed import verify
 
 pytestmark = pytest.mark.release
 ROOT = Path(__file__).parents[2]
-KERNEL_GIT_SOURCE = "arch-kernel @ git+https://github.com/erikmktdig-cell/ARCH-kernel.git@v0.1.0"
-KERNEL_C01_COMMIT = "cea39add0a6785ad9f34362c476aa4c1488d3d13"
 
 
 def _build(output: Path) -> Path:
@@ -40,36 +38,6 @@ def _build_all(output: Path) -> tuple[Path, Path]:
     return next(output.glob("*.whl")), next(output.glob("*.tar.gz"))
 
 
-def _kernel_install_target(output: Path) -> str:
-    checkout = ROOT.parent / "arch-kernel"
-    if checkout.is_dir():
-        head = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
-            cwd=checkout,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        status = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=checkout,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-        if head.stdout.strip() == KERNEL_C01_COMMIT and not status.stdout.strip():
-            kernel_dist = output / "kernel-dist"
-            subprocess.run(
-                ["uv", "build", "--wheel", "--out-dir", str(kernel_dist), str(checkout)],
-                cwd=ROOT,
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            return str(next(kernel_dist.glob("arch_kernel-0.1.0-*.whl")))
-    return KERNEL_GIT_SOURCE
-
-
 def test_wheel_contains_only_the_typed_runtime_package(tmp_path: Path) -> None:
     wheel = _build(tmp_path / "dist")
     with zipfile.ZipFile(wheel) as archive:
@@ -82,51 +50,21 @@ def test_wheel_contains_only_the_typed_runtime_package(tmp_path: Path) -> None:
     assert "arch_runtime/ports/unit_of_work.py" in names
     assert "arch_runtime/persistence/sqlite/sql/0001_initial_tables.sql" in names
     assert "arch_runtime/persistence/sqlite/sql/0002_initial_indexes.sql" in names
-    assert "Requires-Dist: arch-kernel<0.2.0,>=0.1.0" in metadata
+    assert "Requires-Dist: arch-kernel<0.3.0,>=0.2.0" in metadata
     assert not any(name.startswith(("tests/", "src/")) for name in names)
 
 
-def test_wheel_imports_from_an_isolated_environment(tmp_path: Path) -> None:
-    wheel = _build(tmp_path / "dist")
-    environment = tmp_path / "venv"
-    venv.EnvBuilder(with_pip=True).create(environment)
-    python = environment / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
-    subprocess.run(
-        [
-            "uv",
-            "pip",
-            "install",
-            "--python",
-            str(python),
-            _kernel_install_target(tmp_path),
-        ],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    subprocess.run(
-        [str(python), "-m", "pip", "install", "--no-deps", str(wheel)],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    completed = subprocess.run(
-        [
-            str(python),
-            "-I",
-            str(ROOT / "scripts" / "installed_smoke.py"),
-            str(tmp_path / "smoke.db"),
-        ],
-        cwd=tmp_path,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    project_id, version = completed.stdout.strip().split()
-    assert project_id.startswith("PRJ-")
-    assert version == "1"
+@pytest.mark.parametrize("kind", ["wheel", "sdist"])
+def test_distribution_installs_released_kernel_and_public_vertical_slice(
+    tmp_path: Path, kind: str
+) -> None:
+    wheel, sdist = _build_all(tmp_path / "dist")
+    output = verify(wheel if kind == "wheel" else sdist)
+    evidence = json.loads(output)
+    assert evidence["versions"] == {"arch-kernel": "0.2.0", "arch-runtime": "0.2.0"}
+    assert evidence["workflow"] == "a -> b -> c"
+    assert evidence["migration"]["post_migration_replay"] == "PASS"
+    print(output)
 
 
 def test_sdist_contains_reviewable_sources_and_no_generated_state(tmp_path: Path) -> None:

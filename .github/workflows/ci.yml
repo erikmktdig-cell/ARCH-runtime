@@ -55,7 +55,7 @@ jobs:
           cache-dependency-glob: uv.lock
           cache-suffix: ${{ matrix.os }}-${{ matrix.python }}
       - run: uv sync --frozen --all-groups --python ${{ matrix.python }}
-      - run: uv run pytest -p no:cacheprovider
+      - run: uv run pytest -p no:cacheprovider -rA --junitxml=build/test-results.xml --cov-report=json:build/coverage.json
 
   build:
     runs-on: ubuntu-latest
@@ -71,10 +71,11 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen --all-groups
-      - run: uv build
+      - run: uv run python -m build
       - run: uv run twine check dist/*
       - run: uv run python scripts/check_release.py dist
       - run: uv run python scripts/check_reproducible_build.py
+      - run: uv run python scripts/verify_installed.py dist/arch_runtime-0.2.0-py3-none-any.whl
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: distributions
@@ -105,3 +106,5 @@ jobs:
         run: >-
           uv run pip-audit -r audit-requirements.txt
           --disable-pip --progress-spinner off
+      - name: Audit all platform dependency versions
+        run: uv run python scripts/audit_lock.py

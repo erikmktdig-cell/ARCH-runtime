@@ -17,7 +17,7 @@ from scripts.release_tools import ROOT, ReleaseCheckError, sha256
 def _build(output: Path) -> dict[str, str]:
     environment = {**os.environ, "SOURCE_DATE_EPOCH": "1785456000", "PYTHONHASHSEED": "0"}
     subprocess.run(
-        ["uv", "build", "--out-dir", str(output)],
+        [sys.executable, "-m", "build", "--outdir", str(output)],
         cwd=ROOT,
         env=environment,
         check=True,

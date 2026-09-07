@@ -4,6 +4,7 @@
 .mypy_cache/
 .pytest_cache/
 .pytest-tmp/
+.pytest-tmp-*/
 .ruff_cache/
 .uv-cache/
 .venv/

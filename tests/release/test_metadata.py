@@ -19,7 +19,7 @@ def test_package_metadata_is_frozen() -> None:
     assert project["name"] == "arch-runtime"
     assert project["requires-python"] == ">=3.12,<3.14"
     assert project["dynamic"] == ["version"]
-    assert project["dependencies"] == ["arch-kernel>=0.1.0,<0.2.0"]
+    assert project["dependencies"] == ["arch-kernel>=0.2.0,<0.3.0"]
     assert project["urls"] == {
         "Repository": "https://github.com/erikmktdig-cell/ARCH-runtime",
         "Issues": "https://github.com/erikmktdig-cell/ARCH-runtime/issues",

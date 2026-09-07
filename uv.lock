@@ -13,11 +13,17 @@ wheels = [
 
 [[package]]
 name = "arch-kernel"
-version = "0.1.0"
-source = { git = "https://github.com/erikmktdig-cell/ARCH-kernel.git?tag=v0.1.0#08b9c9bd57d90ee12a6b40e350431ca1c3bb8bc0" }
+version = "0.2.0"
+source = { url = "https://github.com/erikmktdig-cell/ARCH-kernel/releases/download/v0.2.0/arch_kernel-0.2.0-py3-none-any.whl" }
 dependencies = [
     { name = "pydantic" },
 ]
+wheels = [
+    { url = "https://github.com/erikmktdig-cell/ARCH-kernel/releases/download/v0.2.0/arch_kernel-0.2.0-py3-none-any.whl", hash = "sha256:3c581c37c4890ac50ff8c1722aca7cc4e29fed85a37656d6f08e22ffb8847b5c" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "pydantic", specifier = ">=2,<3" }]
 
 [[package]]
 name = "arch-runtime"
@@ -40,7 +46,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "arch-kernel", git = "https://github.com/erikmktdig-cell/ARCH-kernel.git?tag=v0.1.0" }]
+requires-dist = [{ name = "arch-kernel", url = "https://github.com/erikmktdig-cell/ARCH-kernel/releases/download/v0.2.0/arch_kernel-0.2.0-py3-none-any.whl" }]
 
 [package.metadata.requires-dev]
 dev = [
