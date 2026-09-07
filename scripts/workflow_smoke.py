@@ -5,7 +5,9 @@ from __future__ import annotations
 import importlib.metadata
 import json
 import runpy
+import sqlite3
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -241,6 +243,23 @@ def workflow_slice(database: Path) -> dict[str, object]:
         assert not noop.recovered
     with Runtime.open(config) as reopened:
         assert reopened.get_project(created.project_id) == final
+    # A disposable copy removes only acceleration data, never authoritative history.
+    full_database = database.with_name("workflow-full-replay.db")
+    source = sqlite3.connect(database)
+    target_database = sqlite3.connect(full_database)
+    try:
+        source.backup(target_database)
+        target_database.execute("DELETE FROM project_snapshots")
+        target_database.commit()
+    finally:
+        target_database.close()
+        source.close()
+    with Runtime.open(replace(config, database=full_database)) as full_runtime:
+        reconstructed = full_runtime.replay_project(created.project_id)
+        assert reconstructed.snapshot_disposition == "not_available"
+        assert reconstructed.reconstructed_state == final.state
+        assert reconstructed.record_fingerprint == final.record_fingerprint
+        assert reconstructed.content_fingerprint == final.content_fingerprint
     return {
         "workflow": "a -> b -> c",
         "record_version": final.record_version,

@@ -25,6 +25,8 @@ The public facade exercises creation, explicit workflow initialization, states
 `a -> b -> c`, exact retries, conflicting retries, stale aggregate version/fingerprint,
 stale workflow version/content fingerprint, full replay, a snapshot at state `b`,
 snapshot plus transition tail replay to `c`, recovery no-op, and reopening.
+An independent disposable database copy omits snapshots and fully replays the same
+four-event history; its final state and both fingerprints must match snapshot-tail replay.
 
 The historical fixture is representative test input constructed in a new disposable
 database. It models ProjectState 1.0.0 using public contracts and registration APIs.
