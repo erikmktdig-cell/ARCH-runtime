@@ -4,9 +4,9 @@
 the deterministic contracts published by [`arch-kernel`](https://github.com/erikmktdig-cell/ARCH-kernel)
 without allowing infrastructure concerns to flow back into the kernel.
 
-## Version 0.1.0
+## Version 0.2.0
 
-Python 3.12 and 3.13 are supported. Version 0.1.0 exposes the approved runtime capabilities
+Python 3.12 and 3.13 are supported. Version 0.2.0 exposes the approved runtime capabilities
 through one stable synchronous Python facade.
 `Runtime.open()` validates SQLite compatibility and composes project creation, transition,
 replay, snapshots, recovery, and stored-contract migration. `create_project`
@@ -23,9 +23,9 @@ the immutable project stream verifies and an optimistic CAS succeeds.
 CAS, preserves historical event rows, and appends a verified migration projection event.
 HTTP APIs, CLIs, and user interfaces remain intentionally unimplemented.
 
-## C02 Development State
+## Generic Workflow Authority
 
-The unreleased C02 API accepts an explicit immutable
+The API accepts an explicit immutable
 `WorkflowDefinitionRegistry` through `RuntimeConfig`. `Runtime.initialize_workflow()`
 resolves only configured definitions, derives the initial state from that definition,
 and atomically persists ProjectState, `project.aggregate.workflow_initialized`, and
@@ -61,12 +61,10 @@ arch-kernel  -X-> arch-runtime
 
 ## Development
 
-The committed lock resolves `arch-kernel` from the published `v0.1.0` Git tag while
-the built package retains the public compatible range `arch-kernel>=0.1.0,<0.2.0`.
-C02 development and tests require the exact approved local C01 commit
-`cea39add0a6785ad9f34362c476aa4c1488d3d13` as an explicit editable environment
-override. That local path is not recorded in `pyproject.toml`, the lock, wheel, or sdist;
-release dependency compatibility remains owned by C04.
+The committed lock resolves the published Kernel v0.2.0 wheel. The package metadata
+retains the public compatible range `arch-kernel>=0.2.0,<0.3.0`. Release installation
+tests verify the approved wheel SHA-256 before installing it into a fresh environment
+outside both repositories. No local Kernel checkout or editable override is required.
 
 ```console
 uv sync --frozen --all-groups

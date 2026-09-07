@@ -23,7 +23,7 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-  "arch-kernel>=0.1.0,<0.2.0",
+  "arch-kernel>=0.2.0,<0.3.0",
 ]
 
 [project.urls]
@@ -45,7 +45,7 @@ dev = [
 ]
 
 [tool.uv.sources]
-arch-kernel = { git = "https://github.com/erikmktdig-cell/ARCH-kernel.git", tag = "v0.1.0" }
+arch-kernel = { url = "https://github.com/erikmktdig-cell/ARCH-kernel/releases/download/v0.2.0/arch_kernel-0.2.0-py3-none-any.whl" }
 
 [tool.hatch.version]
 path = "src/arch_runtime/__about__.py"

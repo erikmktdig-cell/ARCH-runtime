@@ -8,8 +8,14 @@ import re
 import subprocess
 import tarfile
 import zipfile
+from email.parser import BytesParser
 from pathlib import Path
 from typing import Any
+
+from packaging.requirements import Requirement
+
+from arch_runtime import __version__
+from scripts.verify_installed import KERNEL_SHA256, KERNEL_URL
 
 ROOT = Path(__file__).resolve().parents[1]
 FORBIDDEN_PARTS = {
@@ -21,6 +27,10 @@ FORBIDDEN_PARTS = {
     "__pycache__",
     "dist",
     "htmlcov",
+    ".hypothesis",
+    ".uv-cache",
+    ".pytest-tmp",
+    ".coverage",
 }
 FORBIDDEN_SUFFIXES = (".db", ".db-journal", ".db-shm", ".db-wal", ".sqlite", ".sqlite3")
 SECRET_PATTERNS = (
@@ -57,7 +67,11 @@ def inspect_artifacts(directory: Path) -> list[dict[str, Any]]:
         for path in directory.iterdir()
         if path.suffix == ".whl" or path.name.endswith(".tar.gz")
     )
-    if len(artifacts) != 2:
+    expected = {
+        f"arch_runtime-{__version__}-py3-none-any.whl",
+        f"arch_runtime-{__version__}.tar.gz",
+    }
+    if {path.name for path in artifacts} != expected:
         raise ReleaseCheckError("release requires exactly one wheel and one sdist")
     inventory: list[dict[str, Any]] = []
     for artifact in artifacts:
@@ -68,6 +82,7 @@ def inspect_artifacts(directory: Path) -> list[dict[str, Any]]:
                 raise ReleaseCheckError(f"forbidden archive member: {name}")
             if Path(name).name.startswith(".env"):
                 raise ReleaseCheckError(f"forbidden environment file: {name}")
+        _inspect_contents(artifact)
         inventory.append(
             {
                 "filename": artifact.name,
@@ -77,6 +92,56 @@ def inspect_artifacts(directory: Path) -> list[dict[str, Any]]:
             }
         )
     return inventory
+
+
+def _inspect_contents(artifact: Path) -> None:
+    if artifact.suffix == ".whl":
+        with zipfile.ZipFile(artifact) as archive:
+            members = {
+                name: archive.read(name) for name in archive.namelist() if not name.endswith("/")
+            }
+    else:
+        with tarfile.open(artifact, "r:gz") as tar:
+            members = {}
+            for member in tar.getmembers():
+                if member.issym() or member.islnk():
+                    raise ReleaseCheckError("release archives must not contain links")
+                if member.isfile():
+                    stream = tar.extractfile(member)
+                    assert stream is not None
+                    members[member.name] = stream.read()
+    metadata = [
+        value
+        for name, value in members.items()
+        if name.endswith((".dist-info/METADATA", "/PKG-INFO"))
+    ]
+    if not metadata:
+        raise ReleaseCheckError("missing distribution metadata")
+    for raw in metadata:
+        parsed = BytesParser().parsebytes(raw)
+        if parsed["Name"] != "arch-runtime" or parsed["Version"] != __version__:
+            raise ReleaseCheckError("incorrect release identity")
+        requirements = [Requirement(value) for value in parsed.get_all("Requires-Dist", [])]
+        if len(requirements) != 1:
+            raise ReleaseCheckError("unexpected runtime dependency set")
+        dependency = requirements[0]
+        if (
+            dependency.name != "arch-kernel"
+            or dependency.url is not None
+            or str(dependency.specifier) != "<0.3.0,>=0.2.0"
+            or dependency.marker is not None
+        ):
+            raise ReleaseCheckError("incorrect or nonportable Kernel dependency")
+    for name, raw in members.items():
+        content = raw.decode("utf-8", errors="replace")
+        if any(pattern.search(content) for pattern in SECRET_PATTERNS):
+            raise ReleaseCheckError(f"possible secret in artifact: {name}")
+        if "C:" + "\\Users\\" in content or "/" + "home/" in content:
+            raise ReleaseCheckError(f"personal path in artifact: {name}")
+        if name.endswith(("METADATA", "PKG-INFO", "pyproject.toml")) and any(
+            value in content for value in ("file:" + "//", "git+", "editable =", "../ARCH-")
+        ):
+            raise ReleaseCheckError(f"source dependency leakage: {name}")
 
 
 def tracked_files(root: Path = ROOT) -> tuple[Path, ...]:
@@ -114,15 +179,26 @@ def release_manifest(
     ci: dict[str, str],
 ) -> dict[str, Any]:
     return {
-        "version": "0.1.0",
+        "package": "arch-runtime",
+        "version": __version__,
+        "implementation_baseline": "af19867518cae87fc3c1a8b229f49c22a2c9b87a",
         "commit": commit,
-        "tag": "v0.1.0",
+        "tag": f"v{__version__}",
+        "tag_peeled_commit": commit,
+        "repository": "https://github.com/erikmktdig-cell/ARCH-runtime",
+        "release_url": f"https://github.com/erikmktdig-cell/ARCH-runtime/releases/tag/v{__version__}",
         "python": ["3.12", "3.13"],
         "tests": tests,
         "branch_coverage": branch_coverage,
         "artifacts": [item["filename"] for item in artifacts],
         "sha256": {item["filename"]: item["sha256"] for item in artifacts},
-        "kernel_dependency": "arch-kernel>=0.1.0,<0.2.0",
+        "kernel_dependency": "arch-kernel>=0.2.0,<0.3.0",
+        "released_kernel": {
+            "version": "0.2.0",
+            "url": KERNEL_URL,
+            "sha256": KERNEL_SHA256,
+            "commit": "4aa6a3acddd1b0ef761fb4dd0cfff720706ff5df",
+        },
         "ci": ci,
     }
 

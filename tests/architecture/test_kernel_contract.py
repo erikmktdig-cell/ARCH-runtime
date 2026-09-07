@@ -14,7 +14,7 @@ PACKAGE_ROOT = Path(__file__).parents[2] / "src" / "arch_runtime"
 
 def test_released_kernel_version_and_public_symbols_are_available() -> None:
     installed = Version(importlib.metadata.version("arch-kernel"))
-    assert installed in SpecifierSet(">=0.1.0,<0.2.0")
+    assert installed in SpecifierSet(">=0.2.0,<0.3.0")
     assert ArtifactRecord.__module__.startswith("arch_kernel.contracts")
     assert ProjectState.__module__.startswith("arch_kernel.contracts")
     assert callable(canonicalize_json)
