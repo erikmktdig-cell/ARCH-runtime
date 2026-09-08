@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import io
+import json
 import tarfile
 import tomllib
 import zipfile
 from pathlib import Path
 
 import pytest
+from scripts.check_branch_coverage import check
 from scripts.release_tools import ReleaseCheckError, inspect_artifacts
 from scripts.verify_installed import KERNEL_SHA256, KERNEL_URL
 
@@ -80,3 +82,34 @@ def test_inspector_rejects_embedded_secret(tmp_path: Path) -> None:
     archives(tmp_path, member="arch_runtime/leak.txt", content=("ghp_" + "a" * 30).encode())
     with pytest.raises(ReleaseCheckError, match="secret"):
         inspect_artifacts(tmp_path)
+
+
+@pytest.mark.parametrize(("covered", "branches"), [(80, 100), (0, 0), (8999, 10000)])
+def test_branch_gate_cannot_be_satisfied_by_combined_coverage(
+    tmp_path: Path,
+    covered: int,
+    branches: int,
+) -> None:
+    path = tmp_path / "coverage.json"
+    path.write_text(
+        json.dumps(
+            {
+                "totals": {
+                    "percent_covered": 99.9,
+                    "covered_branches": covered,
+                    "num_branches": branches,
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="branch"):
+        check(path)
+
+
+def test_branch_gate_accepts_exact_threshold(tmp_path: Path) -> None:
+    path = tmp_path / "coverage.json"
+    path.write_text(
+        json.dumps({"totals": {"covered_branches": 90, "num_branches": 100}}), encoding="utf-8"
+    )
+    assert check(path) == 90.0

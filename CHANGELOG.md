@@ -22,6 +22,8 @@ All notable changes to this project will be documented in this file.
 - Require `arch-kernel>=0.2.0,<0.3.0`, resolved from the verified published v0.2.0 wheel.
 - C04-R release hardening verifies installed workflow, migration, replay and snapshot
   behavior outside source checkouts on the supported Python/OS matrix.
+- Enforce branch-only coverage independently of combined coverage, with additional
+  evidence-integrity, failure-path, and concurrency regressions. No runtime semantics changed.
 - New projects now persist ProjectState 2.0.0 with an explicit workflow registry.
 - Runtime replay and stored-contract migration projection understand authoritative generic
   workflow initialization without changing phase-status semantics.

@@ -58,6 +58,21 @@ does not replace lock integrity validation or installation verification.
 
 ## Final Evidence Authority
 
+### Coverage Gate Correction
+
+Inspection of the initial candidate's coverage JSON found 90.90% combined coverage
+but only 518/642 branches (80.69%). The inherited coverage.py fail-under gate measures
+combined line/branch coverage, not the branch-only percentage required by C04-R.
+No tag was created. The candidate artifacts were invalidated for release.
+
+The corrected matrix also runs `scripts/check_branch_coverage.py`, which requires
+at least 90% of actual branches. Regression tests prove that a high combined number
+cannot satisfy this gate. Additional tests exercise contradictory result evidence,
+normalization failures, canonical payload corruption, failed pragmas/transactions,
+missing post-commit state, altered migration evidence, and snapshot/recovery races.
+No production behavior, coverage exclusions, skips, or denominator changes are used.
+The final manifest records both percentages separately.
+
 The external release manifest and Notion closeout record the exact final commit,
 actual test count/coverage, hosted run identities, artifact hashes, governance, and
 independent publication verification. This source document describes the reproducible
